@@ -73,7 +73,7 @@ class Data(pl.LightningDataModule):
         assert self.DAG is not None, "No DAG simulated yet"
         assert self.X is not None, "No SEM simulated yet"
 
-        DX = TensorDataset(torch.tensor(self.X))
+        DX = TensorDataset(torch.from_numpy(self.X))
 
         _train_size = np.floor(self.N * self.train_size_ratio)
         self.train, self.test = random_split(
