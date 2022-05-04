@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Tuple
+from typing import Tuple, Any
 
 import numpy as np
 
@@ -85,6 +85,10 @@ class lit_NOTEARS(pl.LightningDataModule):
         self.model = model
         self.h = np.inf
 
+        # We need a way to cope with NOTEARS dual
+        #   ascent strategy.
+        self.automatic_optimization=False
+
 
     def _dual_ascent_step(self, x, optimizer: torch.optim.Optimizer, h: float) -> Tuple[float]:
         h_new = None
@@ -93,8 +97,9 @@ class lit_NOTEARS(pl.LightningDataModule):
             def closure():
                 optimizer.zero_grad()
                 _, loss = self.model(x)
-                loss.backward()
+                self.manual_backward(loss)
                 return loss
+            
             optimizer.step(closure)
 
             with torch.no_grad():
@@ -107,16 +112,16 @@ class lit_NOTEARS(pl.LightningDataModule):
         return self.model.alpha, self.model.rho, h_new
         
 
-    def training_step(self, batch, batch_idx) -> torch.Tensor:
-        alpha, rho, h = self._dual_ascent_step(batch, self.optimizer, self.h)
+    def training_step(self, batch, batch_idx) -> Any:
+        opt = self.optimizers()
+
+        alpha, rho, h = self._dual_ascent_step(batch, opt, self.h)
         self.h = h
 
         return self.h
 
-
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        self.optimizer = ut.LBFGSBScipy(self.model.parameters())
-        return self.optimizer
+        return ut.LBFGSBScipy(self.model.parameters())
 
 
 class DStruct:
