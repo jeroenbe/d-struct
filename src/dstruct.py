@@ -85,12 +85,6 @@ class lit_NOTEARS(pl.LightningModule):
         self.save_hyperparameters()
 
 
-    def on_trian_batch_start(self, batch, batch_idx) -> int:
-        if self.h <= self.h_tol or self.model.rho >= self.rho_max:
-            return -1
-        return 1
-
-
 
     def _dual_ascent_step(self, x, optimizer: torch.optim.Optimizer, h: float) -> Tuple[float]:
         h_new = None
