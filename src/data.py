@@ -93,13 +93,13 @@ class Data(pl.LightningDataModule):
         self.setup()
 
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.train)
+        return DataLoader(self.train, batch_size=self.batch_size)
     
     def test_dataloader(self) -> DataLoader:
-        return DataLoader(self.test)
+        return DataLoader(self.test, batch_size=self.batch_size)
     
     def val_dataloader(self) -> DataLoader:
-        pass
+        return DataLoader(self.train, batch_size=self.batch_size)
 
 
 class P(Data):

@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from re import X
 from typing import Tuple, Any
 
 import numpy as np
@@ -7,29 +8,15 @@ import torch
 import torch.nn as nn
 
 import pytorch_lightning as pl
+from pytorch_lightning.loggers import WandbLogger
 
 from src.dsl import NotearsMLP
 import src.utils as ut
+from src.data import Data
 
 
-class DSL(nn.Module):
-    def __init__(self, dim: int):
-        super().__init__()
-        
-        self.dim = dim                      # Regardless of DSL, each
-        self.A = torch.randn(               #   should have a dimension
-            size=(self.dim, self.dim)       #   and adjecency matrix.
-        )                                   #   Note that we do not 
-                                            #   restrict A to be binary
-                                            #   such as to allow linear
-                                            #   systems.
 
-    @abstractmethod
-    def loss(self, x: torch.Tensor):
-        pass
-
-
-class NOTEARS(DSL):
+class NOTEARS(nn.Module):
     def __init__(
             self, 
             dim: int,                           # Dims of system
@@ -40,8 +27,9 @@ class NOTEARS(DSL):
             lambda2: float=.0,                  #   |
 
         ):
-        super().__init__(dim=dim)
-
+        super().__init__()
+        
+        self.dim = dim
         self.notears = NotearsMLP(dims=[dim, *nonlinear_dims])
 
         self.rho = rho
@@ -74,20 +62,33 @@ class NOTEARS(DSL):
         return x_hat, loss
 
 
-class lit_NOTEARS(pl.LightningDataModule):
+class lit_NOTEARS(pl.LightningModule):
 
     def __init__(
             self,
             model: NOTEARS,
+            h_tol: float=1e-8,
+            rho_max: float=1e+16,
         ):
         super().__init__()
         
         self.model = model
         self.h = np.inf
 
+        self.h_tol, self.rho_max = h_tol, rho_max
+
         # We need a way to cope with NOTEARS dual
         #   ascent strategy.
         self.automatic_optimization=False
+
+        self.save_hyperparameters()
+
+
+    def on_trian_batch_start(self, batch, batch_idx) -> int:
+        if self.h <= self.h_tol or self.model.rho >= self.rho_max:
+            return -1
+        return 1
+
 
 
     def _dual_ascent_step(self, x, optimizer: torch.optim.Optimizer, h: float) -> Tuple[float]:
@@ -104,7 +105,7 @@ class lit_NOTEARS(pl.LightningDataModule):
 
             with torch.no_grad():
                 h_new = self.model.h_func().item()
-            if h_new > .25 * h:
+            if h_new > .25 * self.h:
                 self.model.rho *= 10
             else:
                 break
@@ -115,17 +116,21 @@ class lit_NOTEARS(pl.LightningDataModule):
     def training_step(self, batch, batch_idx) -> Any:
         opt = self.optimizers()
 
-        alpha, rho, h = self._dual_ascent_step(batch, opt, self.h)
+        (X,) = batch
+
+        alpha, rho, h = self._dual_ascent_step(X, opt, self.h)
         self.h = h
 
-        return self.h
+        self.logger.experiment.log({
+            'h': h, 'alpha': alpha, 'rho': rho
+        })
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         return ut.LBFGSBScipy(self.model.parameters())
 
 
 class DStruct:
-    def __init__(self, P: np.ndarray, dim: int, dsl: DSL):
+    def __init__(self, P: np.ndarray, dim: int, dsl: NOTEARS):
         self.P = P
         self.dim = dim
         
@@ -135,6 +140,32 @@ class DStruct:
     
     def setup(self):
         pass
+
+
+def main():
+    torch.set_default_dtype(torch.double)
+    np.set_printoptions(precision=3)
+
+    pl.seed_everything(123)
+
+    n, d, s0, graph_type, sem_type = 200, 5, 9, 'ER', 'mim'
+    D = Data(dim=d, s0=s0, N=n, sem_type=sem_type, dag_type=graph_type, batch_size=n)
+    D.setup()
+    nt = NOTEARS(dim=D.dim)
+    NT = lit_NOTEARS(model=nt)
+
+    wb_logger = WandbLogger(project='d-struct-notears')
+    wb_logger.watch(NT, log='all')
+
+    trainer = pl.Trainer(NT, datamodule=D, logger=wb_logger)
+    trainer.fit()
+
+    
+
+
+
+if __name__ == '__main__':
+    main()
     
 
     
