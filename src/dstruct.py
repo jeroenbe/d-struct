@@ -9,6 +9,7 @@ import torch.nn as nn
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import EarlyStopping
 
 from src.dsl import NotearsMLP
 import src.utils as ut
@@ -121,9 +122,9 @@ class lit_NOTEARS(pl.LightningModule):
         alpha, rho, h = self._dual_ascent_step(X, opt, self.h)
         self.h = h
 
-        self.logger.experiment.log({
-            'h': h, 'alpha': alpha, 'rho': rho
-        })
+        self.log('h', h, on_step=True, logger=True)
+        self.log('rho', rho, on_step=True, logger=True)
+        self.log('alpha', alpha, on_step=True, logger=True)
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         return ut.LBFGSBScipy(self.model.parameters())
@@ -143,12 +144,16 @@ class DStruct:
 
 
 def main():
+    n, d, s0, graph_type, sem_type = 200, 5, 9, 'ER', 'mim'
+    max_epochs = 100
+
+
     torch.set_default_dtype(torch.double)
     np.set_printoptions(precision=3)
 
     pl.seed_everything(123)
 
-    n, d, s0, graph_type, sem_type = 200, 5, 9, 'ER', 'mim'
+    
     D = Data(dim=d, s0=s0, N=n, sem_type=sem_type, dag_type=graph_type, batch_size=n)
     D.setup()
     nt = NOTEARS(dim=D.dim)
@@ -157,10 +162,19 @@ def main():
     wb_logger = WandbLogger(project='d-struct-notears')
     wb_logger.watch(NT, log='all')
 
-    trainer = pl.Trainer(NT, datamodule=D, logger=wb_logger)
-    trainer.fit()
+    early_stop_h = EarlyStopping(monitor='h', stopping_threshold=NT.h_tol)
+    early_stop_rho = EarlyStopping(monitor='rho', stopping_threshold=NT.rho_max)
 
-    
+    trainer = pl.Trainer(
+        logger=wb_logger,
+        log_every_n_steps=1,
+        max_epochs=max_epochs,
+        callbacks=[
+            early_stop_h,
+            early_stop_rho,
+        ]
+    )
+    trainer.fit(NT, datamodule=D)
 
 
 
