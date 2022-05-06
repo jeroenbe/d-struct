@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from re import X
-from typing import Tuple, Any
+from typing import Callable, Tuple, Any
 
 import click, logging
 
@@ -17,7 +17,7 @@ from pytorch_lightning.callbacks import EarlyStopping
 
 from src.dsl import NotearsMLP
 import src.utils as ut
-from src.data import Data
+from src.data import Data, P
 
 
 class NOTEARS(nn.Module):
@@ -142,14 +142,16 @@ class lit_NOTEARS(pl.LightningModule):
 
 
 
-class DStruct:
-    def __init__(self, P: np.ndarray, dim: int, dsl: NOTEARS):
+class DStruct(pl.LightningDataModule):
+    def __init__(self, P: np.ndarray, dim: int, dsl: Callable, p: P, K: int=5):
         self.P = P
         self.dim = dim
-        
-        self.As = {
-            i: dsl(dim=dim) for i in range(len(P))
-        }
+
+        self.dsls = {i: dsl() for i in range(K)}
+        self.p = p
+
+        self.subsets = p(K)
+
     
     def setup(self):
         pass

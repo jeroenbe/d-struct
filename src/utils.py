@@ -11,6 +11,7 @@ import scipy.optimize as sopt
 
 import igraph as ig
 
+
 def is_dag(W):
     G = ig.Graph.Weighted_Adjacency(W.tolist())
     return G.is_dag()
@@ -250,3 +251,13 @@ class CustomFormatter(logging.Formatter):
         log_fmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
+
+logger = logging.getLogger("My_app")
+logger.setLevel(logging.INFO)
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+ch.setFormatter(CustomFormatter())
+
+logger.addHandler(ch)

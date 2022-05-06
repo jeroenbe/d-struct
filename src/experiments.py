@@ -19,10 +19,6 @@ from src.dstruct import NOTEARS, lit_NOTEARS
 
 
 
-
-
-
-
 model_refs = {
     'notears-mlp': lit_NOTEARS,
 }
