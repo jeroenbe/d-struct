@@ -77,9 +77,9 @@ def experiment(
 
 
 @click.command()
-@click.option("--d", type=int, default=5)
-@click.option("--n", type=int, default=200)
-@click.option("--s", type=int, default=9)
+@click.option("--d", type=int, default=5, help="Amount of variables")
+@click.option("--n", type=int, default=200, help="Sample size")
+@click.option("--s", type=int, default=9, help="Expected number of edges in the simulated DAG")
 @click.option("--graph_type", 
     type=click.Choice(['ER', 'SF', 'BP'], case_sensitive=False), 
     default='ER', 
