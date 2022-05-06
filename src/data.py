@@ -1,9 +1,12 @@
 import os
 from pathlib import Path
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any, Iterable, Optional, Tuple
+
+import scipy.stats as stats
 
 import numpy as np
+from numpy.lib import stride_tricks
 
 import torch
 from torch.utils.data import random_split, DataLoader, TensorDataset
@@ -75,9 +78,9 @@ class Data(pl.LightningDataModule):
 
         DX = TensorDataset(torch.from_numpy(self.X))
 
-        _train_size = np.floor(self.N * self.train_size_ratio)
+        self._train_size = int(np.floor(self.N * self.train_size_ratio))
         self.train, self.test = random_split(
-            DX, [int(_train_size), int(self.N-_train_size)]
+            DX, [int(self._train_size), int(self.N-self._train_size)]
         )
 
 
@@ -104,6 +107,38 @@ class Data(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=os.cpu_count())
 
+class Subset(pl.LightningDataModule):
+    def __init__(self, 
+            X: np.ndarray,
+            train_size_ratio: float=.5,
+            batch_size: int=256) -> None:
+        super().__init__()
+
+        self.train_size_ratio = train_size_ratio
+        self.batch_size = batch_size
+
+        self.X = X
+        self.N = self.X.shape[0]
+    
+    def setup(self):
+        DX = TensorDataset(torch.from_numpy(self.X))
+
+        _train_size = np.floor(self.N * self.train_size_ratio)
+        self.train, self.test = random_split(
+            DX, [int(_train_size), int(self.N-_train_size)]
+        )
+    
+    def train_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.train,
+            batch_size=self.batch_size,
+            num_workers=os.cpu_count())
+
+    def test_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.test,
+            batch_size=self.batch_size,
+            num_workers=os.cpu_count())
 
 
 class P(Data):
@@ -113,22 +148,46 @@ class P(Data):
         - load data from existing Data class (by id)
         - act as Data class on it's own
     """
-    def __init__(self, D: Data, N: int):
-        self.D = Data
-        self.N = N
+    def __init__(self, D: Data):
+        self.D = D
+        self.X = D.train.dataset.tensors[0].numpy()
+        self.N = self.D._train_size
     
     @abstractmethod
     def __call__(self, *args: Any, **kwds: Any) -> Data:
         pass
 
-class RandomP(P):
-    def __init__(self, D: Data, N: int):
-        super().__init__(D=D, N=N)
-    
-    def __call__(self, *args: Any, **kwds: Any) -> Data:
-        weights = np.random.rand(len(self.D))
 
 
+class BetaP(P):
+    def __init__(self, D: Data):
+        super().__init__(D=D)
 
 
+    def _get_betas(self, K: int):
+        assert K > 0, f"Cannot have K of {K}"
+        
+        first_half = [(i, K) for i in np.linspace(1, K-1, int((K - K%2)/2))]
+        second_half = [(K, i) for i in np.linspace(K-1, 1, int((K - K%2)/2))]
+        mid = [(K, K)] if K%2 else []
 
+        params = [*first_half, *mid, *second_half]
+        betas = [stats.beta(*param) for param in params]
+        
+        return betas
+
+    def __call__(self, K: int) -> Iterable[Subset]:
+        betas = self._get_betas(K)
+
+        subsets = []
+        for beta in betas:
+            probs = beta.pdf(np.linspace(0, 1, self.N))
+            probs = (probs - probs.min()) / (probs.max() - probs.min())
+
+            mask = np.random.binomial(1, probs)
+
+            subset = Subset(X=self.X[mask == 1], train_size_ratio=1., batch_size=self.D.batch_size)
+            subset.setup()
+
+            subsets.append(subset)
+        return subsets

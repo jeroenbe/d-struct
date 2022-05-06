@@ -19,15 +19,7 @@ from src.dstruct import NOTEARS, lit_NOTEARS
 
 
 
-logger = logging.getLogger("My_app")
-logger.setLevel(logging.INFO)
 
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-
-ch.setFormatter(ut.CustomFormatter())
-
-logger.addHandler(ch)
 
 
 
@@ -48,11 +40,11 @@ def experiment(
         wb_name: str='synth',                   # subdiv for the w&b project
     ) -> Any:
     
-    logger.info(f"Starting: \n * {count} experiments\n * with following models: {list(models.keys())}")
+    ut.logger.info(f"Starting: \n * {count} experiments\n * with following models: {list(models.keys())}")
     for exp_id in range(count):
         D = Data(**data_config)
         D.setup()
-        logger.info(f"Started exp #{exp_id}")
+        ut.logger.info(f"Started exp #{exp_id}")
 
         for m, config in models.items():
             assert m in model_refs.keys(), f"{m} not yet implemented, please choose from: {list(model_refs.keys())}"
@@ -73,15 +65,15 @@ def experiment(
                 log_every_n_steps=1,
                 **config['train'])
             
-            logger.info(f"Training {m} for exp #{exp_id}")
+            ut.logger.info(f"Training {m} for exp #{exp_id}")
             trainer.fit(model, datamodule=D)
             trainer.test(model, datamodule=D)
-            logger.info(f"Finished {m} for exp #{exp_id}")
+            ut.logger.info(f"Finished {m} for exp #{exp_id}")
 
             wandb.finish()
             wb_logger.finalize('success')
-        logger.info(f"Finished exp #{exp_id}")
-    logger.info(f"Finished.")
+        ut.logger.info(f"Finished exp #{exp_id}")
+    ut.logger.info(f"Finished.")
 
 
 @click.command()

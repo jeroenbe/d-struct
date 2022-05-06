@@ -15,6 +15,7 @@ def is_dag(W):
     G = ig.Graph.Weighted_Adjacency(W.tolist())
     return G.is_dag()
 
+
 class LBFGSBScipy(torch.optim.Optimizer):
     """Wrap L-BFGS-B algorithm, using scipy routines.
     
@@ -167,6 +168,7 @@ class LocallyConnected(nn.Module):
             self.bias is not None
         )
 
+
 def count_accuracy(B_true, B_est):
     """Compute various accuracy metrics for B_est.
     true positive = predicted association exists in condition in correct direction
@@ -224,8 +226,6 @@ def count_accuracy(B_true, B_est):
     missing_lower = np.setdiff1d(cond_lower, pred_lower, assume_unique=True)
     shd = len(extra_lower) + len(missing_lower) + len(reverse)
     return {'fdr': fdr, 'tpr': tpr, 'fpr': fpr, 'shd': shd, 'nnz': pred_size}
-
-
 
 
 class CustomFormatter(logging.Formatter):
