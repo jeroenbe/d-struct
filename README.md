@@ -7,9 +7,10 @@ python -m src.experiments --help
 # Usage: python -m src.experiments [OPTIONS]
 
 # Options:
-#   --d INTEGER
-#   --n INTEGER
-#   --s INTEGER
+#   --d INTEGER                     Amount of variables
+#   --n INTEGER                     Sample size
+#   --s INTEGER                     Expected number of edges in the simulated
+#                                   DAG
 #   --graph_type [ER|SF|BP]         ER: Erdos-Renyi, SF: Scale Free, BP:
 #                                   BiPartite  [default: ER]
 #   --sem_type [mim|mlp|gp|gp-add]  mim: Index Model, mlp: Multi-Layered
