@@ -87,7 +87,7 @@ class lit_NOTEARS(pl.LightningModule):
         #   ascent strategy.
         self.automatic_optimization=False
 
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=['model'])
 
 
 
