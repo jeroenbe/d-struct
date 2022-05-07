@@ -141,27 +141,21 @@ class Subset(pl.LightningDataModule):
             num_workers=os.cpu_count())
 
 
-class P(Data):
-    """
-    Wrapper for Data class.
-    Should be able to:
-        - load data from existing Data class (by id)
-        - act as Data class on it's own
-    """
-    def __init__(self, D: Data):
-        self.D = D
-        self.X = D.train.dataset.tensors[0].numpy()
-        self.N = self.D._train_size
-    
+class P:
+    def __init__(self):
+        pass
+
     @abstractmethod
-    def __call__(self, *args: Any, **kwds: Any) -> Data:
+    def __call__(self, *args: Any, **kwds: Any) -> Iterable[Subset]:
         pass
 
 
 
 class BetaP(P):
-    def __init__(self, D: Data):
-        super().__init__(D=D)
+    def __init__(self, K: int):
+        super().__init__()
+
+        self.betas = self._get_betas(K)
 
 
     def _get_betas(self, K: int):
@@ -176,18 +170,16 @@ class BetaP(P):
         
         return betas
 
-    def __call__(self, K: int) -> Iterable[Subset]:
-        betas = self._get_betas(K)
+    def __call__(self, batch: Iterable) -> Iterable[Subset]:
+        N = batch.shape[0]
 
         subsets = []
-        for beta in betas:
-            probs = beta.pdf(np.linspace(0, 1, self.N))
+        for beta in self.betas:
+            probs = beta.pdf(np.linspace(0, 1, N))
             probs = (probs - probs.min()) / (probs.max() - probs.min())
 
             mask = np.random.binomial(1, probs)
 
-            subset = Subset(X=self.X[mask == 1], train_size_ratio=1., batch_size=self.D.batch_size)
-            subset.setup()
-
-            subsets.append(subset)
-        return subsets
+            X = batch[mask == 1]
+            subsets.append(X)
+        return tuple(subsets)
