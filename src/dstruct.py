@@ -1,4 +1,4 @@
-from typing import Callable, Tuple, Any
+from typing import Callable, Iterable, Tuple, Any
 
 import numpy as np
 
@@ -66,6 +66,7 @@ class lit_NOTEARS(pl.LightningModule):
             h_tol: float=1e-8,
             rho_max: float=1e+16,
             w_threshold: float=.3,
+            save_hyperparams: bool=True,
         ):
         super().__init__()
         
@@ -78,12 +79,13 @@ class lit_NOTEARS(pl.LightningModule):
         # We need a way to cope with NOTEARS dual
         #   ascent strategy.
         self.automatic_optimization=False
+        
+        if save_hyperparams:
+            self.save_hyperparameters(ignore=['model'])
 
-        self.save_hyperparameters(ignore=['model'])
 
 
-
-    def _dual_ascent_step(self, x, optimizer: torch.optim.Optimizer, h: float) -> Tuple[float]:
+    def _dual_ascent_step(self, x, optimizer: torch.optim.Optimizer) -> Tuple[float]:
         h_new = None
 
         while self.model.rho < self.rho_max:
@@ -110,7 +112,7 @@ class lit_NOTEARS(pl.LightningModule):
 
         (X,) = batch
 
-        alpha, rho, h = self._dual_ascent_step(X, opt, self.h)
+        alpha, rho, h = self._dual_ascent_step(X, opt)
         self.h = h
 
         self.log('h', h, on_step=True, logger=True, prog_bar=True)
@@ -120,10 +122,16 @@ class lit_NOTEARS(pl.LightningModule):
     def configure_optimizers(self) -> torch.optim.Optimizer:
         return ut.LBFGSBScipy(self.model.parameters())
 
-    def A(self):
-        B_est = self.model.notears.fc1_to_adj()
-        B_est[np.abs(B_est) < self.w_threshold] = 0
-        B_est[B_est > 0] = 1
+    def A(self, grad: bool=False) -> np.ndarray:
+        if grad:
+            B_est = self.model.notears.fc1_to_adj_grad()
+            
+        else:
+            B_est = self.model.notears.fc1_to_adj()
+            B_est[np.abs(B_est) < self.w_threshold] = 0
+            B_est[B_est > 0] = 1
+        
+        
         return B_est
 
     def test_step(self, batch, batch_idx) -> Any:
@@ -134,18 +142,148 @@ class lit_NOTEARS(pl.LightningModule):
 
 
 
-class DStruct(pl.LightningDataModule):
-    def __init__(self, P: np.ndarray, dim: int, dsl: Callable, p: P, K: int=5):
+class DStruct(pl.LightningModule):
+    def __init__(
+            self, 
+            dim: int,
+            dsl: Callable,
+            dsl_config: dict,
+            p: P, 
+            K: int=5,
+            lr: float=.001,
+            h_tol: float=1e-8,
+            rho_max: float=1e+16,
+            w_threshold: float=.3,):
+
+        super().__init__()
+        
+        self.h_tol, self.rho_max, self.w_threshold = h_tol, rho_max, w_threshold
+        
+        self.lr = lr
+        
+        self.K = K
         self.P = P
         self.dim = dim
 
-        self.dsls = {i: dsl() for i in range(K)}
+        self.automatic_optimization=False
+
+        self.dsls = {i: dsl(**dsl_config) for i in range(K)}
+        for i in list(self.dsls.keys()):
+            self.dsls[i].h = np.inf
+        
         self.p = p
 
-        self.subsets = p(K)
+        self.save_hyperparameters()
 
-    
-    def setup(self):
+
+    def training_step(self, batch, batch_idx):
+        (X,) = batch
+        subsets = self.p(X)
+
+        opts = self.optimizers()
+        opt = opts[0]
+        opt.zero_grad()
+
+
+
+        
+        hs, rhos, alphas = [], [], []
+        for i in list(self.dsls.keys()):
+            subset, dsl = subsets[i], self.dsls[i]
+
+            alpha, rho, h = self._dual_ascent_step(subset, opts[i+1], dsl)
+            dsl.h = h
+            
+            hs.append(h)
+            rhos.append(rho)
+            alphas.append(alpha)
+        
+        hs, rhos, alphas = np.array(hs), np.array(rhos), np.array(alphas)
+        h, rho, alpha = hs.mean(), rhos.mean(), alphas.mean()
+
+        self.log_dict({'h': h, 'rho': rho, 'alpha': alpha})
+
+
+        def closure():
+            opt.zero_grad()
+            loss = self._loss()
+            self.manual_backward(loss)
+
+            self.log('training loss', loss.item())
+            
+            return loss
+        
+        opt.step(closure)
+
+        
+
+    def _dual_ascent_step(self, x, optimizer: torch.optim.Optimizer, dsl: NOTEARS) -> Tuple[float]:
+        h_new = None
+
+        while dsl.rho < self.rho_max:
+            def closure():
+                optimizer.zero_grad()
+                _, loss = dsl(x)
+                self.manual_backward(loss)
+                return loss
+            
+            optimizer.step(closure)
+
+            with torch.no_grad():
+                h_new = dsl.h_func().item()
+            if h_new > .25 * dsl.h:
+                dsl.rho *= 10
+            else:
+                break
+        
+        dsl.alpha += dsl.rho * h_new
+        
+        return dsl.alpha, dsl.rho, h_new
+
+    def configure_optimizers(self) -> Iterable[torch.optim.Optimizer]:
+        dsl_optimizers = [ut.LBFGSBScipy(dsl.parameters()) for dsl in list(self.dsls.values())]
+        
+        module_list = nn.ModuleList(list(self.dsls.values()))
+        params = module_list.parameters()
+
+        self_optim = ut.LBFGSBScipy(params)
+
+        return tuple([
+            self_optim,
+            *dsl_optimizers
+        ])
+
+
+    def forward(self, grad: bool=True):
+        if grad:
+            As = tuple([dsl.notears.fc1_to_adj_grad() for dsl in list(self.dsls.values())])
+            _As = torch.stack(As).mean(dim=0)
+        else:
+            As = np.array([dsl.notears.fc1_to_adj() for dsl in list(self.dsls.values())])
+            _As = As.mean(axis=0)
+            _As[_As > .5] = 1
+            _As[_As <= .5] = 0
+
+
+        return As, _As
+
+    def _loss(self):
+        As, A_comp = self.forward()
+
+        mask = torch.ones(A_comp.shape)
+        mask.diagonal().zero_()
+
+        A_comp.detach()
+        A_comp.diagonal().zero_()
+        
+        l = 0
+        mse = nn.MSELoss()
+        for A_est in As:
+            l += mse(A_est * mask, A_comp)
+        return l
+
+
+    def A(self):
         pass
 
 

@@ -35,4 +35,5 @@ igraph
 wandb
 click
 matplotlib
+tabulate
 ```

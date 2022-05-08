@@ -76,16 +76,19 @@ class NotearsMLP(nn.Module):
         reg = torch.sum(self.fc1_pos.weight + self.fc1_neg.weight)
         return reg
 
-    @torch.no_grad()
-    def fc1_to_adj(self) -> np.ndarray:  # [j * m1, i] -> [i, j]
+    
+    def fc1_to_adj_grad(self) -> np.ndarray:  # [j * m1, i] -> [i, j]
         """Get W from fc1 weights, take 2-norm over m1 dim"""
         d = self.dims[0]
         fc1_weight = self.fc1_pos.weight - self.fc1_neg.weight  # [j * m1, i]
         fc1_weight = fc1_weight.view(d, -1, d)  # [j, m1, i]
         A = torch.sum(fc1_weight * fc1_weight, dim=1).t()  # [i, j]
         W = torch.sqrt(A)  # [i, j]
-        W = W.cpu().detach().numpy()  # [i, j]
         return W
 
+    @torch.no_grad()
+    def fc1_to_adj(self) -> np.ndarray:
+        W = self.fc1_to_adj_grad()
+        return W.cpu().detach().numpy()
 
 

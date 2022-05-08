@@ -1,5 +1,5 @@
-import logging
 import click
+from tabulate import tabulate
 
 from typing import Any
 
@@ -14,13 +14,14 @@ from pytorch_lightning.callbacks import EarlyStopping
 
 import src.utils as ut
 
-from src.data import Data
-from src.dstruct import NOTEARS, lit_NOTEARS
+from src.data import Data, BetaP
+from src.dstruct import NOTEARS, DStruct, lit_NOTEARS
 
 
 
 model_refs = {
     'notears-mlp': lit_NOTEARS,
+    'dstruct-mlp': DStruct
 }
 
 def experiment(
@@ -36,7 +37,14 @@ def experiment(
         wb_name: str='synth',                   # subdiv for the w&b project
     ) -> Any:
     
-    ut.logger.info(f"Starting: \n * {count} experiments\n * with following models: {list(models.keys())}")
+    experiment_summary = f"""
+    Starting following setup:
+    --> {count} experiments
+    --> with following models: {list(models.keys())}
+    """
+
+    ut.logger.info(f"\n{tabulate([[experiment_summary]], tablefmt='grid')}\n")
+
     for exp_id in range(count):
         D = Data(**data_config)
         D.setup()
@@ -76,6 +84,7 @@ def experiment(
 @click.option("--d", type=int, default=5, help="Amount of variables")
 @click.option("--n", type=int, default=200, help="Sample size")
 @click.option("--s", type=int, default=9, help="Expected number of edges in the simulated DAG")
+@click.option("--K", type=int, default=5, help="Amount of subsets for D-Struct")
 @click.option("--graph_type", 
     type=click.Choice(['ER', 'SF', 'BP'], case_sensitive=False), 
     default='ER', 
@@ -95,6 +104,7 @@ def main(
         d,
         n,
         s,
+        k,
         graph_type,
         sem_type,
         epochs,
@@ -122,6 +132,22 @@ def main(
             'batch_size': batch_size,
         },
         models= {
+            'dstruct-mlp': {
+                'model': {
+                    'dim': d,
+                    'dsl': NOTEARS,
+                    'dsl_config': {
+                        'dim': d
+                    },
+                    'h_tol': nt_h_tol,
+                    'rho_max': nt_rho_max,
+                    'p': BetaP(k),
+                    'K': k,
+                },
+                'train': {
+                    'max_epochs': epochs
+                }
+            },
             'notears-mlp': {
                 'model': {
                     'model': NOTEARS(dim=d),
