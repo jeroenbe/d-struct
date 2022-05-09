@@ -186,7 +186,6 @@ class DStruct(pl.LightningModule):
 
 
 
-        
         hs, rhos, alphas = [], [], []
         for i in list(self.dsls.keys()):
             subset, dsl = subsets[i], self.dsls[i]
@@ -283,7 +282,14 @@ class DStruct(pl.LightningModule):
         return l
 
 
-    def A(self):
-        pass
+    def A(self) -> np.ndarray:
+        _, A = self.forward(grad=False)
+        return A
+
+    def test_step(self, batch, batch_idx) -> Any:
+        B_est = self.A()
+        B_true = self.trainer.datamodule.DAG
+
+        self.log_dict(ut.count_accuracy(B_true, B_est))
 
 
