@@ -10,12 +10,14 @@ from src.trace_expm import trace_expm
 
 # From Zheng et al. (2020)
 class NotearsMLP(nn.Module):
-    def __init__(self, dims, bias=True):
+    def __init__(self, dims, bias=True, priors=[]):
         super(NotearsMLP, self).__init__()
         assert len(dims) >= 2
         assert dims[-1] == 1
         d = dims[0]
         self.dims = dims
+        self.priors = priors
+
         # fc1: variable splitting for l1
         self.fc1_pos = nn.Linear(d, d * dims[1], bias=bias)
         self.fc1_neg = nn.Linear(d, d * dims[1], bias=bias)
@@ -27,6 +29,12 @@ class NotearsMLP(nn.Module):
             layers.append(LocallyConnected(d, dims[l + 1], dims[l + 2], bias=bias))
         self.fc2 = nn.ModuleList(layers)
 
+    def _check(self, target):
+      if len(self.priors)!=0:
+        return any((self.priors[:,None] == target).all(2).any(1))
+      else:
+        return False
+  
     def _bounds(self):
         d = self.dims[0]
         bounds = []
@@ -34,6 +42,10 @@ class NotearsMLP(nn.Module):
             for m in range(self.dims[1]):
                 for i in range(d):
                     if i == j:
+                        bound = (0, 0)
+                    elif self._check([i,j]):
+                        bound = (0, 0)
+                    elif self._check([j,i]):
                         bound = (0, 0)
                     else:
                         bound = (0, None)

@@ -106,8 +106,10 @@ class LBFGSBScipy(torch.optim.Optimizer):
                             jac=True,
                             bounds=bounds)
 
+
         final_params = torch.from_numpy(sol.x)
         final_params = final_params.to(torch.get_default_dtype())
+        #print(np.max(initial_params-sol.x),np.min(initial_params-sol.x))
         self._distribute_flat_params(final_params)
 
 

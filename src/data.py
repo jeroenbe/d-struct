@@ -172,9 +172,8 @@ class BetaP(P):
 
     def __call__(self, batch: Iterable) -> Iterable[Subset]:
         N = batch.shape[0]
-
-        #TODO: sort the batch on some covariate(-combo)
-
+        batch, _ = torch.sort(batch,dim=1)
+        
         subsets = []
         for beta in self.betas:
             probs = beta.pdf(np.linspace(0, 1, N))

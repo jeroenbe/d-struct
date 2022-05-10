@@ -34,7 +34,7 @@ def experiment(
         },                                      #   }
                                                 # }
         data_config: dict={},                   # KWArgs for Data DataModule
-        wb_name: str='synth',                   # subdiv for the w&b project
+        wb_name: str='run1',                   # subdiv for the w&b project
     ) -> Any:
     
     experiment_summary = f"""
@@ -67,6 +67,7 @@ def experiment(
             trainer = pl.Trainer(
                 logger=wb_logger,
                 log_every_n_steps=1,
+                
                 **config['train'])
             
             ut.logger.info(f"Training {m} for exp #{exp_id}")
@@ -98,6 +99,7 @@ def experiment(
 @click.option("--epochs", type=int, default=100, show_default=True)
 @click.option("--batch_size", type=int, default=256, show_default=True)
 @click.option("--seed", type=int, default=None, show_default=True)
+@click.option("--lmbda", type=int, default=3, show_default=True)
 @click.option("--nt-h_tol", type=float, default=1e-8, help="MINIMUM h value for NOTEARS.")
 @click.option("--nt-rho_max", type=float, default=1e+16, help="MAXIMUM value for rho in dual ascent NOTEARS.")
 def main(
@@ -108,6 +110,7 @@ def main(
         graph_type,
         sem_type,
         epochs,
+        lmbda,
         batch_size,
         seed,
         nt_h_tol,
@@ -121,7 +124,7 @@ def main(
         pl.seed_everything(seed)
 
     experiment(
-        count=3,
+        count=1,
         data_config={
             'dim': d,
             's0': s,
@@ -143,9 +146,14 @@ def main(
                     'rho_max': nt_rho_max,
                     'p': BetaP(k),
                     'K': k,
+                    'lmbda': lmbda
                 },
                 'train': {
-                    'max_epochs': epochs
+                    'max_epochs': epochs,
+                    'callbacks': [
+                        EarlyStopping(monitor='h', stopping_threshold=nt_h_tol),
+                        EarlyStopping(monitor='rho', stopping_threshold=nt_rho_max)
+                    ]
                 }
             },
             'notears-mlp': {

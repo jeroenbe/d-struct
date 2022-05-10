@@ -7,11 +7,11 @@ class TraceExpm(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input):
         # detach so we can cast to NumPy
-        E = slin.expm(input.detach().numpy())
+        E = slin.expm(input.cpu().detach().numpy())
         f = np.trace(E)
-        E = torch.from_numpy(E)
+        E = torch.from_numpy(E)#.cuda()
         ctx.save_for_backward(E)
-        return torch.as_tensor(f, dtype=input.dtype)
+        return torch.as_tensor(f, dtype=input.dtype)#.cuda()
 
     @staticmethod
     def backward(ctx, grad_output):
