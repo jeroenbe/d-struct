@@ -7,7 +7,7 @@ class TraceExpm(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input):
         # detach so we can cast to NumPy
-        E = slin.expm(input.detach().numpy())
+        E = slin.expm(input.cpu().detach().numpy())
         f = np.trace(E)
         E = torch.from_numpy(E)
         ctx.save_for_backward(E)

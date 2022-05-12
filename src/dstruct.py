@@ -1,6 +1,8 @@
+from contextlib import nullcontext
 from typing import Callable, Iterable, Tuple, Any
 
 import numpy as np
+from scipy.sparse.linalg import dsolve
 
 import torch
 import torch.nn as nn
@@ -151,26 +153,27 @@ class DStruct(pl.LightningModule):
             p: P, 
             K: int=5,
             lr: float=.001,
+            lmbda=2,
             h_tol: float=1e-8,
             rho_max: float=1e+16,
             w_threshold: float=.3,):
 
         super().__init__()
-        
+  
         self.h_tol, self.rho_max, self.w_threshold = h_tol, rho_max, w_threshold
         
         self.lr = lr
-        
         self.K = K
         self.P = P
         self.dim = dim
+        self.lmbda=lmbda
 
         self.automatic_optimization=False
-
-        self.dsls = {i: dsl(**dsl_config) for i in range(K)}
-        for i in list(self.dsls.keys()):
-            self.dsls[i].h = np.inf
+        self.dsl_list = nn.ModuleList([NOTEARS(dim=self.dim) for i in range(self.K)])
         
+        for i, dsl in enumerate(self.dsl_list):
+            self.dsl_list[i].h = np.inf
+
         self.p = p
 
         self.save_hyperparameters()
@@ -185,34 +188,36 @@ class DStruct(pl.LightningModule):
         opt.zero_grad()
 
 
+        if self.current_epoch>=0:
+          hs, rhos, alphas = [], [], []
+          for i, dsl in enumerate(self.dsl_list):
+              subset = subsets[i]
+              #subset, dsl = subset.to(self.device), dsl.to(self.device)
 
-        hs, rhos, alphas = [], [], []
-        for i in list(self.dsls.keys()):
-            subset, dsl = subsets[i], self.dsls[i]
+              alpha, rho, h = self._dual_ascent_step(subset, opts[i+1], dsl)
+              dsl.h = h
+              
+              hs.append(h)
+              rhos.append(rho)
+              alphas.append(alpha)
+          
+          hs, rhos, alphas = np.array(hs), np.array(rhos), np.array(alphas)
+          h, rho, alpha = hs.max(), rhos.min(), alphas.mean()
 
-            alpha, rho, h = self._dual_ascent_step(subset, opts[i+1], dsl)
-            dsl.h = h
+          self.log_dict({'h': h, 'rho': rho, 'alpha': alpha})
+
+
+        # def closure():
+        #     opt.zero_grad()
+        #     loss = self._loss()
+        #     self.manual_backward(loss)
+        #     print(f"Loss: {loss.item()}")
+        #     self.log('training loss', loss.item())
             
-            hs.append(h)
-            rhos.append(rho)
-            alphas.append(alpha)
+        #     return loss
         
-        hs, rhos, alphas = np.array(hs), np.array(rhos), np.array(alphas)
-        h, rho, alpha = hs.mean(), rhos.mean(), alphas.mean()
-
-        self.log_dict({'h': h, 'rho': rho, 'alpha': alpha})
-
-
-        def closure():
-            opt.zero_grad()
-            loss = self._loss()
-            self.manual_backward(loss)
-
-            self.log('training loss', loss.item())
-            
-            return loss
-        
-        opt.step(closure)
+        # print(batch_idx)
+        # opt.step(closure)
 
         
 
@@ -222,7 +227,11 @@ class DStruct(pl.LightningModule):
         while dsl.rho < self.rho_max:
             def closure():
                 optimizer.zero_grad()
+                mse_loss = self._loss()
                 _, loss = dsl(x)
+                #print(f'dsl loss: {loss}')
+                loss+=self.lmbda*mse_loss.item()
+                #print(f'mse loss: {mse_loss}')
                 self.manual_backward(loss)
                 return loss
             
@@ -235,33 +244,33 @@ class DStruct(pl.LightningModule):
             else:
                 break
         
+        #print(f"alpha: {dsl.alpha}, rho:{dsl.rho}, h_new:{h_new}")
         dsl.alpha += dsl.rho * h_new
         
         return dsl.alpha, dsl.rho, h_new
 
     def configure_optimizers(self) -> Iterable[torch.optim.Optimizer]:
-        dsl_optimizers = [ut.LBFGSBScipy(dsl.parameters()) for dsl in list(self.dsls.values())]
+        dsl_optimizers = [ut.LBFGSBScipy(dsl.parameters()) for dsl in self.dsl_list]
+  
+        self_optim = ut.LBFGSBScipy(self.dsl_list.parameters())
         
-        module_list = nn.ModuleList(list(self.dsls.values()))
-        params = module_list.parameters()
-
-        self_optim = ut.LBFGSBScipy(params)
-
         return tuple([
             self_optim,
             *dsl_optimizers
         ])
 
 
-    def forward(self, grad: bool=True):
+    def forward(self, threshold=0.5, grad: bool=True):
         if grad:
-            As = tuple([dsl.notears.fc1_to_adj_grad() for dsl in list(self.dsls.values())])
+            As = tuple([dsl.notears.fc1_to_adj_grad() for dsl in self.dsl_list])
             _As = torch.stack(As).mean(dim=0)
         else:
-            As = np.array([dsl.notears.fc1_to_adj() for dsl in list(self.dsls.values())])
+            As = np.array([dsl.notears.fc1_to_adj() for dsl in self.dsl_list])
+            #print(As)
             _As = As.mean(axis=0)
-            _As[_As > .5] = 1
-            _As[_As <= .5] = 0
+            #print(f'mean: {_As}')
+            _As[np.abs(_As) > threshold] = 1
+            _As[np.abs(_As) <= threshold] = 0
 
 
         return As, _As
@@ -282,14 +291,21 @@ class DStruct(pl.LightningModule):
         return l
 
 
-    def A(self) -> np.ndarray:
-        _, A = self.forward(grad=False)
+    def A(self, threshold=0.5) -> np.ndarray:
+        _, A = self.forward(threshold=threshold, grad=False)
         return A
 
     def test_step(self, batch, batch_idx) -> Any:
-        B_est = self.A()
-        B_true = self.trainer.datamodule.DAG
 
+        for threshold in np.linspace(start=0,stop=1,num=100):
+          B_est = self.A(threshold)
+          if ut.is_dag(B_est):
+            print(f'Is DAG for {threshold}')
+            break
+
+        B_true = self.trainer.datamodule.DAG
+        print(f"B_est: {B_est}")
+        print(f"B_true: {B_true}")
         self.log_dict(ut.count_accuracy(B_true, B_est))
 
 
