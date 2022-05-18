@@ -1,6 +1,6 @@
-import torch
 import numpy as np
 import scipy.linalg as slin
+import torch
 
 
 class TraceExpm(torch.autograd.Function):
@@ -15,7 +15,7 @@ class TraceExpm(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        E, = ctx.saved_tensors
+        (E,) = ctx.saved_tensors
         grad_input = grad_output * E.t()
         return grad_input
 

@@ -1,15 +1,12 @@
 # Source from Zheng et al. 2020 (https://github.com/xunzheng/notears/blob/master/notears/locally_connected.py)
 import logging
-
-import numpy as np
-
-import torch
-import torch.nn as nn
 import math
 
-import scipy.optimize as sopt
-
 import igraph as ig
+import numpy as np
+import scipy.optimize as sopt
+import torch
+import torch.nn as nn
 
 
 def is_dag(W):
@@ -19,7 +16,7 @@ def is_dag(W):
 
 class LBFGSBScipy(torch.optim.Optimizer):
     """Wrap L-BFGS-B algorithm, using scipy routines.
-    
+
     Courtesy: Arthur Mensch's gist
     https://gist.github.com/arthurmensch/c55ac413868550f89225a0b9212aa4cd
     """
@@ -29,10 +26,12 @@ class LBFGSBScipy(torch.optim.Optimizer):
         super(LBFGSBScipy, self).__init__(params, defaults)
 
         if len(self.param_groups) != 1:
-            raise ValueError("LBFGSBScipy doesn't support per-parameter options"
-                             " (parameter groups)")
+            raise ValueError(
+                "LBFGSBScipy doesn't support per-parameter options"
+                " (parameter groups)"
+            )
 
-        self._params = self.param_groups[0]['params']
+        self._params = self.param_groups[0]["params"]
         self._numel = sum([p.numel() for p in self._params])
 
     def _gather_flat_grad(self):
@@ -50,7 +49,7 @@ class LBFGSBScipy(torch.optim.Optimizer):
     def _gather_flat_bounds(self):
         bounds = []
         for p in self._params:
-            if hasattr(p, 'bounds'):
+            if hasattr(p, "bounds"):
                 b = p.bounds
             else:
                 b = [(None, None)] * p.numel()
@@ -72,7 +71,7 @@ class LBFGSBScipy(torch.optim.Optimizer):
         for p in self._params:
             numel = p.numel()
             # view as to avoid deprecated pointwise semantics
-            p.data = params[offset:offset + numel].view_as(p.data)
+            p.data = params[offset : offset + numel].view_as(p.data)
             offset += numel
         assert offset == self._numel
 
@@ -92,7 +91,7 @@ class LBFGSBScipy(torch.optim.Optimizer):
             loss = closure()
             loss = loss.item()
             flat_grad = self._gather_flat_grad().cpu().detach().numpy()
-            return loss, flat_grad.astype('float64')
+            return loss, flat_grad.astype("float64")
 
         initial_params = self._gather_flat_params()
         initial_params = initial_params.cpu().detach().numpy()
@@ -100,11 +99,9 @@ class LBFGSBScipy(torch.optim.Optimizer):
         bounds = self._gather_flat_bounds()
 
         # Magic
-        sol = sopt.minimize(wrapped_closure,
-                            initial_params,
-                            method='L-BFGS-B',
-                            jac=True,
-                            bounds=bounds)
+        sol = sopt.minimize(
+            wrapped_closure, initial_params, method="L-BFGS-B", jac=True, bounds=bounds
+        )
 
         final_params = torch.from_numpy(sol.x)
         final_params = final_params.to(torch.get_default_dtype())
@@ -133,15 +130,15 @@ class LocallyConnected(nn.Module):
         self.input_features = input_features
         self.output_features = output_features
 
-        self.weight = nn.Parameter(torch.Tensor(num_linear,
-                                                input_features,
-                                                output_features))
+        self.weight = nn.Parameter(
+            torch.Tensor(num_linear, input_features, output_features)
+        )
         if bias:
             self.bias = nn.Parameter(torch.Tensor(num_linear, output_features))
         else:
             # You should always register all possible parameters, but the
             # optional ones can be None if you want.
-            self.register_parameter('bias', None)
+            self.register_parameter("bias", None)
 
         self.reset_parameters()
 
@@ -165,9 +162,11 @@ class LocallyConnected(nn.Module):
     def extra_repr(self):
         # (Optional)Set the extra information about this module. You can test
         # it by printing an object of this class.
-        return 'num_linear={}, in_features={}, out_features={}, bias={}'.format(
-            self.num_linear, self.input_features, self.output_features,
-            self.bias is not None
+        return "num_linear={}, in_features={}, out_features={}, bias={}".format(
+            self.num_linear,
+            self.input_features,
+            self.output_features,
+            self.bias is not None,
         )
 
 
@@ -188,14 +187,14 @@ def count_accuracy(B_true, B_est):
     """
     if (B_est == -1).any():  # cpdag
         if not ((B_est == 0) | (B_est == 1) | (B_est == -1)).all():
-            raise ValueError('B_est should take value in {0,1,-1}')
+            raise ValueError("B_est should take value in {0,1,-1}")
         if ((B_est == -1) & (B_est.T == -1)).any():
-            raise ValueError('undirected edge should only appear once')
+            raise ValueError("undirected edge should only appear once")
     else:  # dag
         if not ((B_est == 0) | (B_est == 1)).all():
-            raise ValueError('B_est should take value in {0,1}')
+            raise ValueError("B_est should take value in {0,1}")
         if not is_dag(B_est):
-            raise ValueError('B_est should be a DAG')
+            raise ValueError("B_est should be a DAG")
     d = B_true.shape[0]
     # linear index of nonzeros
     pred_und = np.flatnonzero(B_est == -1)
@@ -227,7 +226,7 @@ def count_accuracy(B_true, B_est):
     extra_lower = np.setdiff1d(pred_lower, cond_lower, assume_unique=True)
     missing_lower = np.setdiff1d(cond_lower, pred_lower, assume_unique=True)
     shd = len(extra_lower) + len(missing_lower) + len(reverse)
-    return {'fdr': fdr, 'tpr': tpr, 'fpr': fpr, 'shd': shd, 'nnz': pred_size}
+    return {"fdr": fdr, "tpr": tpr, "fpr": fpr, "shd": shd, "nnz": pred_size}
 
 
 class CustomFormatter(logging.Formatter):
@@ -245,13 +244,14 @@ class CustomFormatter(logging.Formatter):
         logging.INFO: blue + format + reset,
         logging.WARNING: yellow + format + reset,
         logging.ERROR: red + format + reset,
-        logging.CRITICAL: bold_red + format + reset
+        logging.CRITICAL: bold_red + format + reset,
     }
 
     def format(self, record):
         log_fmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
+
 
 logger = logging.getLogger("My_app")
 logger.setLevel(logging.INFO)
