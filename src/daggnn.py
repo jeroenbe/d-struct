@@ -1,6 +1,8 @@
 from typing import Any
 import numpy as np
 
+import networkx as nx
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -109,6 +111,7 @@ class DAG_GNN(pl.LightningModule):
             lr: float=.001,
             lr_decay: float=30,
             gamma: float=.1,
+            w_threshold: float=.3,
         ):
         
         super().__init__()
@@ -119,6 +122,7 @@ class DAG_GNN(pl.LightningModule):
         self.tau_A = tau_A
         self.lambda_A = lambda_A
         self.c_A = c_A
+        self.w_threshold = w_threshold
 
         self.encoder = DAGGNN_MLPEncoder(
             n_in=self.dim, 
@@ -215,8 +219,16 @@ class DAG_GNN(pl.LightningModule):
 
         return loss
 
+    def get_A(self) -> np.ndarray:
+        B_est = self.graph.copy()
+
+        B_est[np.abs(B_est) < self.w_threshold] = 0
+        B_est[B_est > 0] = 1
+
+        return B_est
+
     def test_step(self, batch, batch_idx) -> Any:
-        B_est = self.graph
+        B_est = self.get_A()
         B_true = self.trainer.datamodule.DAG
         print(f"B_est: {B_est}")
         print(f"B_true: {B_true}")
