@@ -182,7 +182,26 @@ def main(
             # },
             "notears-mlp": {
                 "model": {
-                    "model": NOTEARS(dim=d, sem_type='sobolev'),
+                    "model": NOTEARS(dim=d, sem_type='mlp'),
+                    "h_tol": nt_h_tol,
+                    "rho_max": nt_rho_max,
+                    "n": n,
+                    "s": s,
+                    "dim": d,
+                    "K": k,
+                    "dag_type": graph_type,
+                },
+                "train": {
+                    "max_epochs": epochs,
+                    "callbacks": [
+                        EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
+                        EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
+                    ],
+                },
+            },
+            "notears-sob": {
+                "model": {
+                    "model": NOTEARS(dim=d, sem_type='sob'),
                     "h_tol": nt_h_tol,
                     "rho_max": nt_rho_max,
                     "n": n,
