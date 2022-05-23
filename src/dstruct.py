@@ -9,7 +9,7 @@ from scipy.sparse.linalg import dsolve
 
 import src.utils as ut
 from src.data import Data, P
-from src.dsl import NotearsMLP
+from src.dsl import NotearsMLP, NotearsSobolev
 
 
 class NOTEARS(nn.Module):
@@ -17,6 +17,7 @@ class NOTEARS(nn.Module):
         self,
         dim: int,  # Dims of system
         nonlinear_dims: list = [10, 10, 1],  # Dims for non-linear arch
+        sem_type: str='mlp',
         rho: float = 1.0,  # NOTEARS parameters
         alpha: float = 1.0,  #   |
         lambda1: float = 0.0,  #   |
@@ -25,7 +26,7 @@ class NOTEARS(nn.Module):
         super().__init__()
 
         self.dim = dim
-        self.notears = NotearsMLP(dims=[dim, *nonlinear_dims])
+        self.notears = NotearsMLP(dims=[dim, *nonlinear_dims]) if sem_type == "mlp" else NotearsSobolev(dim, 5)
 
         self.rho = rho
         self.alpha = alpha

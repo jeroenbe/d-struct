@@ -121,6 +121,7 @@ def experiment(
 @click.option(
     "--rand_sort", type=bool, default="False", help="bool - random sort batches."
 )
+@click.option("--experiment_count", type=int, default=5, help="Amount of seq. experiments to run.")
 def main(
     d,
     n,
@@ -136,6 +137,7 @@ def main(
     nt_rho_max,
     sort,
     rand_sort,
+    experiment_count,
 ):
 
     torch.set_default_dtype(torch.double)
@@ -145,7 +147,7 @@ def main(
         pl.seed_everything(seed)
 
     experiment(
-        count=5,
+        count=experiment_count,
         data_config={
             "dim": d,
             "s0": s,
@@ -178,35 +180,35 @@ def main(
             #         ],
             #     },
             # },
-            # "notears-mlp": {
-            #     "model": {
-            #         "model": NOTEARS(dim=d),
-            #         "h_tol": nt_h_tol,
-            #         "rho_max": nt_rho_max,
-            #         "n": n,
-            #         "s": s,
-            #         "dim": d,
-            #         "K": k,
-            #         "dag_type": graph_type,
-            #     },
-            #     "train": {
-            #         "max_epochs": epochs,
-            #         "callbacks": [
-            #             EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
-            #             EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
-            #         ],
-            #     },
-            # },
-            "dag-gnn": {
+            "notears-mlp": {
                 "model": {
-                    "dim": d,
+                    "model": NOTEARS(dim=d, sem_type='sobolev'),
+                    "h_tol": nt_h_tol,
+                    "rho_max": nt_rho_max,
                     "n": n,
-                    "A": np.zeros((d, d))
+                    "s": s,
+                    "dim": d,
+                    "K": k,
+                    "dag_type": graph_type,
                 },
                 "train": {
-                    "max_epochs": epochs
-                }
-            }
+                    "max_epochs": epochs,
+                    "callbacks": [
+                        EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
+                        EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
+                    ],
+                },
+            },
+            # "dag-gnn": {
+            #     "model": {
+            #         "dim": d,
+            #         "n": n,
+            #         "A": np.zeros((d, d))
+            #     },
+            #     "train": {
+            #         "max_epochs": epochs
+            #     }
+            # }
         },
     )
 
