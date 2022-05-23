@@ -106,7 +106,7 @@ class DAG_GNN(pl.LightningModule):
             n: int,
             A: np.ndarray,
             tau_A: float=.0,
-            lambda_A: float=.0,
+            lambda_A: float=.1,
             c_A: float=1.,
             lr: float=.001,
             lr_decay: float=30,
@@ -219,16 +219,22 @@ class DAG_GNN(pl.LightningModule):
 
         return loss
 
-    def get_A(self) -> np.ndarray:
+    def get_A(self, threshold) -> np.ndarray:
         B_est = self.graph.copy()
-
-        B_est[np.abs(B_est) < self.w_threshold] = 0
-        B_est[B_est > 0] = 1
+        B_est[np.abs(B_est) <= threshold] = 0
+        B_est[np.abs(B_est) > threshold] = 1
 
         return B_est
 
     def test_step(self, batch, batch_idx) -> Any:
-        B_est = self.get_A()
+
+        for threshold in np.linspace(start=0, stop=1, num=100):
+            B_est = self.get_A(threshold)
+            if ut.is_dag(B_est):
+                print(f"Is DAG for {threshold}")
+                self.log_dict({"DAG_threshold": threshold})
+                break
+
         B_true = self.trainer.datamodule.DAG
         print(f"B_est: {B_est}")
         print(f"B_true: {B_true}")
