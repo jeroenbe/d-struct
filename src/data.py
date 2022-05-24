@@ -100,7 +100,7 @@ class Data(pl.LightningDataModule):
 
     def test_dataloader(self) -> DataLoader:
         return DataLoader(
-            self.test, batch_size=self.batch_size, num_workers=os.cpu_count()
+            self.test, batch_size=len(self.test), num_workers=os.cpu_count()
         )
 
 

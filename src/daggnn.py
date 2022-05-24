@@ -342,6 +342,7 @@ class DSTRUCT_DAG_GNN(pl.LightningModule):
             lr_decay: float=30,
             gamma: float=.1,
             w_threshold: float=.3,
+            recursive_dag_search: bool=True
     ) -> None:
         super().__init__()
 
@@ -353,6 +354,8 @@ class DSTRUCT_DAG_GNN(pl.LightningModule):
         self.lmbda = lmbda
         self.s = s
         self.p = p
+
+        self.recursive_dag_search = True
 
         self.dsl_list = nn.ModuleList([dsl(**dsl_config) for i in range(self.K)])
         self._As = np.array([None for i in range(self.K)])
@@ -459,10 +462,29 @@ class DSTRUCT_DAG_GNN(pl.LightningModule):
         else:
             As = self._As
             _As = As.mean(axis=0)
-            _As[np.abs(_As) > threshold] = 1
-            _As[np.abs(_As) <= threshold] = 0
+
+            if self.recursive_dag_search:
+                _As = self._get_dag(_As)
+            else:
+
+                _As[np.abs(_As) > threshold] = 1
+                _As[np.abs(_As) <= threshold] = 0
         
         return As, _As
+
+    def _get_dag(self, As: np.ndarray) -> np.ndarray:
+        As_temp = np.abs(As.copy())
+
+        As_temp[np.where(As_temp == As_temp[As_temp > 0].min())] = 0
+
+        intermediate_dag = As_temp.copy()
+        intermediate_dag[intermediate_dag > 0] = 1
+
+        if ut.is_dag(intermediate_dag):
+            return intermediate_dag
+        else:
+            return self._get_dag(As_temp)
+
 
     def A(self, threshold=.5) -> np.ndarray:
         _, A = self.forward(threshold=threshold, grad=False)
