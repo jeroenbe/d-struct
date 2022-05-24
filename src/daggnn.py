@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Callable
 import numpy as np
 
 import networkx as nx
@@ -11,6 +11,7 @@ from torch.autograd import Variable
 
 import pytorch_lightning as pl
 
+from src.data import Data, P
 import src.utils as ut
 
 
@@ -99,35 +100,31 @@ class DAGGNN_MLPDecoder(nn.Module):
 
 
 
-class DAG_GNN(pl.LightningModule):
+
+class DAG_GNN(nn.Module):
     def __init__(
             self,
             dim: int,
             n: int,
-            A: np.ndarray,
-            tau_A: float=.0,
-            lambda_A: float=.1,
-            c_A: float=1.,
-            lr: float=.001,
-            lr_decay: float=30,
-            gamma: float=.1,
-            w_threshold: float=.3,
-        ):
-        
+            tau_A: float=.0,    # DAG-GNN params
+            lambda_A: float=.1, #   |
+            c_A: float=1.,      #   |
+    ) -> None:
         super().__init__()
 
         self.dim = dim
         self.n = n
-        self.A = A
+        
+        self.A = np.zeros((self.dim, self.dim))
+
         self.tau_A = tau_A
         self.lambda_A = lambda_A
         self.c_A = c_A
-        self.w_threshold = w_threshold
 
         self.encoder = DAGGNN_MLPEncoder(
-            n_in=self.dim, 
-            n_xdims=self.dim, 
-            n_hid=self.dim, 
+            n_in=self.dim,
+            n_xdims=self.dim,
+            n_hid=self.dim,
             n_out=self.dim,
             adj_A=self.A,
             batch_size=256
@@ -142,10 +139,6 @@ class DAG_GNN(pl.LightningModule):
             batch_size=256, 
             n_hid=self.dim
         )
-
-        self.lr = lr
-        self.lr_decay = lr_decay
-        self.gamma = gamma
 
         off_diag = np.ones([self.dim, self.dim]) - np.eye(self.dim)
 
@@ -163,20 +156,8 @@ class DAG_GNN(pl.LightningModule):
         self.triu_indices = ut.get_triu_offdiag_indices(self.dim)
         self.tril_indices = ut.get_tril_offdiag_indices(self.dim)
 
-        self.graph = None
 
 
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(list(self.encoder.parameters()) + list(self.decoder.parameters()), lr=self.lr)
-        scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer, step_size=self.lr_decay, gamma=self.gamma
-        )
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": scheduler,
-        }
-            
     def _h_A(self, A, m):
         expm_A = ut.matrix_poly(A*A, m)
         h_A = torch.trace(expm_A) - m
@@ -186,17 +167,17 @@ class DAG_GNN(pl.LightningModule):
         w1 = self.prox_plus(torch.abs(w)-tau)
         return torch.sign(w)*w1
 
-    def training_step(self, batch, batch_idx):
-        (X,) = batch
-        enc_x, logits, origin_A, adj_A_tilt_encoder, z_gap, z_positive, myA, Wa = self.encoder(X, self.rel_rec, self.rel_send)
-        edges = logits
-        dec_x, output, adj_A_tilt_decoder = self.decoder(X, edges, self.dim, self.rel_rec, self.rel_send, origin_A, adj_A_tilt_encoder, Wa)
+    def forward(self, x: torch.Tensor):
+        return None
 
+    def enc(self, X):
+        return self.encoder(X, self.rel_rec, self.rel_send)
+    
+    def dec(self, X, edges, origin_A, adj_A_tilt_encoder, Wa):
+        return self.decoder(X, edges, self.dim, self.rel_rec, self.rel_send, origin_A, adj_A_tilt_encoder, Wa)
+    
 
-        target=X
-        preds=output
-        variance=0.
-
+    def loss(self, preds, target, variance, logits, graph):
         # reconstruction accuracy loss
         loss_nll = ut.nll_gaussian(preds, target, variance)
 
@@ -207,11 +188,113 @@ class DAG_GNN(pl.LightningModule):
         loss = loss_kl + loss_nll
 
         # add A loss
-        one_adj_A = origin_A # torch.mean(adj_A_tilt_decoder, dim =0)
+        one_adj_A = graph # torch.mean(adj_A_tilt_decoder, dim =0)
         sparse_loss = self.tau_A * torch.sum(torch.abs(one_adj_A))
 
-        h_A = self._h_A(origin_A, self.dim)
-        loss += self.lambda_A * h_A + 0.5 * self.c_A * h_A * h_A + 100. * torch.trace(origin_A*origin_A) + sparse_loss
+        h_A = self._h_A(graph, self.dim)
+        loss += self.lambda_A * h_A + 0.5 * self.c_A * h_A * h_A + 100. * torch.trace(graph*graph) + sparse_loss
+
+        return loss
+
+
+
+
+class lit_DAG_GNN(pl.LightningModule):
+    def __init__(
+            self,
+            dim: int,
+            n: int,
+            tau_A: float=.0,
+            lambda_A: float=.1,
+            c_A: float=1.,
+            lr: float=.001,
+            lr_decay: float=30,
+            gamma: float=.1,
+            w_threshold: float=.3,
+        ):
+        
+        super().__init__()
+
+        self.dim = dim
+        self.n = n
+        
+        self.dag_gnn = DAG_GNN(
+            dim=dim,
+            n=n,
+            tau_A=tau_A,
+            lambda_A=lambda_A,
+            c_A=c_A
+        )
+        
+        self.w_threshold = w_threshold
+
+        
+
+        self.lr = lr
+        self.lr_decay = lr_decay
+        self.gamma = gamma
+
+        
+
+        self.graph = None
+
+
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(
+            self.dag_gnn.parameters(),
+            lr=self.lr,
+        )
+
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer,
+            step_size=self.lr_decay,
+            gamma=self.gamma,
+        )
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+        }
+
+    def training_step(self, batch, batch_idx):
+        (X,) = batch
+        (
+            enc_x,
+            logits,
+            origin_A,
+            adj_A_tilt_encoder,
+            z_gap,
+            z_positive,
+            myA,
+            Wa
+        ) = self.dag_gnn.enc(X)
+        edges = logits
+
+        (
+            dec_x,
+            output,
+            adj_A_tilt_decoder
+        ) = self.dag_gnn.dec(
+            X,
+            edges,
+            origin_A,
+            adj_A_tilt_encoder,
+            Wa
+        )
+
+
+        target=X
+        preds=output
+        variance=0.
+
+        loss = self.dag_gnn.loss(
+            preds=preds,
+            target=target,
+            variance=variance,
+            graph=origin_A,
+            logits=logits,
+        )
 
         self.log('loss', loss)
 
@@ -240,3 +323,161 @@ class DAG_GNN(pl.LightningModule):
         print(f"B_true: {B_true}")
         self.log_dict(ut.count_accuracy(B_true, B_est))
 
+
+
+class DSTRUCT_DAG_GNN(pl.LightningModule):
+    def __init__(
+            self,
+            dim: int,
+            n: int,
+            dsl: Callable,
+            dsl_config: dict,
+            p: P,
+            K: int=5,
+            s: int=9,
+            lmbda: int=2,
+            tau_A: float=.0,
+            lambda_A: float=.1,
+            lr: float=.001,
+            lr_decay: float=30,
+            gamma: float=.1,
+            w_threshold: float=.3,
+    ) -> None:
+        super().__init__()
+
+        self.lr = lr
+        self.lr_decay = lr_decay
+        self.gamma = gamma
+        self.K = K
+        self.dim = dim
+        self.lmbda = lmbda
+        self.s = s
+        self.p = p
+
+        self.dsl_list = nn.ModuleList([dsl(**dsl_config) for i in range(self.K)])
+        self._As = np.array([None for i in range(self.K)])
+
+
+        self.save_hyperparameters()
+
+
+    def configure_optimizers(self):
+        optimizers, schedulers = [], []
+        for dsl in self.dsl_list:
+            optimizers.append(
+                torch.optim.Adam(
+                    dsl.parameters(), 
+                    lr=self.lr))
+            schedulers.append(
+                torch.optim.lr_scheduler.StepLR(
+                    optimizers[-1], 
+                    step_size=self.lr_decay, 
+                    gamma=self.gamma))
+        optimizers.append(torch.optim.Adam(self.parameters(), lr=self.lr))
+
+        return optimizers, schedulers
+
+    
+    def training_step(self, batch, batch_idx, optimizer_idx) -> Any:
+        (X,) = batch
+        subsets = self.p(X)
+
+        total_loss = 0
+        
+        for i, dsl in enumerate(self.dsl_list):
+            subset = subsets[i]
+            
+            (
+                enc_x,
+                logits,
+                origin_A,
+                adj_A_tilt_encoder,
+                z_gap,
+                z_positive,
+                myA,
+                Wa
+            ) = dsl.enc(subset)
+            edges = logits
+
+            (
+                dec_x,
+                output,
+                adj_A_tilt_decoder
+            ) = dsl.dec(
+                subset,
+                edges,
+                origin_A,
+                adj_A_tilt_encoder,
+                Wa
+            )
+
+
+            target=subset
+            preds=output
+            variance=0.
+
+            loss = dsl.loss(
+                preds=preds,
+                target=target,
+                variance=variance,
+                graph=origin_A,
+                logits=logits,
+            )
+
+            total_loss += loss
+            self._As[i] = origin_A.data.clone().numpy()
+    
+        total_loss += self._loss(X)
+
+        self.log("loss", total_loss.item())
+
+        return total_loss
+    
+    def _loss(self, X):
+        As, A_comp = self.forward(X)
+
+        mask = torch.ones(A_comp.shape)
+        mask.diagonal().zero_()
+        
+        A_comp.detach()
+        A_comp.diagonal().zero_()
+
+        l=0
+        mse = nn.MSELoss()
+        for A_est in As:
+            l += mse(A_est * mask, A_comp)
+
+        return l
+
+
+
+    def forward(self, X=None, threshold=.5, grad: bool=True) -> Any:
+        if grad:
+            subsets = self.p(X)
+            As = tuple([dsl.enc(subsets[i])[2] for i, dsl in enumerate(self.dsl_list)])
+            _As = torch.stack(As).mean(dim=0)
+        else:
+            As = self._As
+            _As = As.mean(axis=0)
+            _As[np.abs(_As) > threshold] = 1
+            _As[np.abs(_As) <= threshold] = 0
+        
+        return As, _As
+
+    def A(self, threshold=.5) -> np.ndarray:
+        _, A = self.forward(threshold=threshold, grad=False)
+        return A
+    
+    def test_step(self, batch, batch_idx) -> Any:
+
+        for threshold in np.linspace(start=0, stop=1, num=100):
+            B_est = self.A(threshold)
+            if ut.is_dag(B_est):
+                print(f"Is DAG for {threshold}")
+                self.log_dict({"DAG_threshold": threshold})
+                break
+
+        B_true = self.trainer.datamodule.DAG
+        print(f"B_est: {B_est}")
+        print(f"B_true: {B_true}")
+        self.log_dict(ut.count_accuracy(B_true, B_est))

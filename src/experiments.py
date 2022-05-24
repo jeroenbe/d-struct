@@ -12,9 +12,16 @@ from tabulate import tabulate
 import src.utils as ut
 from src.data import BetaP, Data
 from src.dstruct import NOTEARS, DStruct, lit_NOTEARS
-from src.daggnn import DAG_GNN
+from src.daggnn import DAG_GNN, DSTRUCT_DAG_GNN, lit_DAG_GNN
 
-model_refs = {"notears-mlp": lit_NOTEARS, "dstruct-mlp": DStruct, "dag-gnn": DAG_GNN}
+model_refs = {
+    "notears-mlp": lit_NOTEARS, 
+    "notears-sob": lit_NOTEARS,
+    "dstruct-mlp": DStruct, 
+    "dstruct-sob": DStruct, 
+    "dag-gnn": lit_DAG_GNN,
+    "dstruct-dag-gnn": DSTRUCT_DAG_GNN,
+}
 
 
 def experiment(
@@ -158,6 +165,47 @@ def main(
             "batch_size": batch_size,
         },
         models={
+            "dstruct-dag-gnn": {
+                "model": {
+                    "dim": d,
+                    "n": n,
+                    "dsl": DAG_GNN,
+                    "dsl_config": {
+                        "dim": d,
+                        "n": n,
+                    },
+                    "p": BetaP(k, bool(sort), bool(rand_sort)),
+                    "K": k,
+                    "lmbda": lmbda,
+                    "s": s,
+                },
+                "train": {
+                    "max_epochs": epochs,
+
+                }
+            },
+            # "dstruct-sob": {
+            #     "model": {
+            #         "dim": d,
+            #         "dsl": NOTEARS,
+            #         "dsl_config": {"dim": d, "sem_type": "sob"},
+            #         "h_tol": nt_h_tol,
+            #         "rho_max": nt_rho_max,
+            #         "p": BetaP(k, bool(sort), bool(rand_sort)),
+            #         "K": k,
+            #         "lmbda": lmbda,
+            #         "n": n,
+            #         "s": s,
+            #         "dag_type": graph_type,
+            #     },
+            #     "train": {
+            #         "max_epochs": epochs,
+            #         "callbacks": [
+            #             EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
+            #             EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
+            #         ],
+            #     },
+            # },
             # "dstruct-mlp": {
             #     "model": {
             #         "dim": d,
@@ -180,54 +228,53 @@ def main(
             #         ],
             #     },
             # },
-            "notears-mlp": {
-                "model": {
-                    "model": NOTEARS(dim=d, sem_type='mlp'),
-                    "h_tol": nt_h_tol,
-                    "rho_max": nt_rho_max,
-                    "n": n,
-                    "s": s,
-                    "dim": d,
-                    "K": k,
-                    "dag_type": graph_type,
-                },
-                "train": {
-                    "max_epochs": epochs,
-                    "callbacks": [
-                        EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
-                        EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
-                    ],
-                },
-            },
-            "notears-sob": {
-                "model": {
-                    "model": NOTEARS(dim=d, sem_type='sob'),
-                    "h_tol": nt_h_tol,
-                    "rho_max": nt_rho_max,
-                    "n": n,
-                    "s": s,
-                    "dim": d,
-                    "K": k,
-                    "dag_type": graph_type,
-                },
-                "train": {
-                    "max_epochs": epochs,
-                    "callbacks": [
-                        EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
-                        EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
-                    ],
-                },
-            },
-            # "dag-gnn": {
+            # "notears-mlp": {
             #     "model": {
-            #         "dim": d,
+            #         "model": NOTEARS(dim=d, sem_type='mlp'),
+            #         "h_tol": nt_h_tol,
+            #         "rho_max": nt_rho_max,
             #         "n": n,
-            #         "A": np.zeros((d, d))
+            #         "s": s,
+            #         "dim": d,
+            #         "K": k,
+            #         "dag_type": graph_type,
             #     },
             #     "train": {
-            #         "max_epochs": epochs
-            #     }
-            # }
+            #         "max_epochs": epochs,
+            #         "callbacks": [
+            #             EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
+            #             EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
+            #         ],
+            #     },
+            # },
+            # "notears-sob": {
+            #     "model": {
+            #         "model": NOTEARS(dim=d, sem_type='sob'),
+            #         "h_tol": nt_h_tol,
+            #         "rho_max": nt_rho_max,
+            #         "n": n,
+            #         "s": s,
+            #         "dim": d,
+            #         "K": k,
+            #         "dag_type": graph_type,
+            #     },
+            #     "train": {
+            #         "max_epochs": epochs,
+            #         "callbacks": [
+            #             EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
+            #             EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
+            #         ],
+            #     },
+            # },
+            "dag-gnn": {
+                "model": {
+                    "dim": d,
+                    "n": n,
+                },
+                "train": {
+                    "max_epochs": epochs
+                }
+            }
         },
     )
 

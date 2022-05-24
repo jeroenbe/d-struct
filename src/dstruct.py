@@ -173,7 +173,6 @@ class DStruct(pl.LightningModule):
 
         self.lr = lr
         self.K = K
-        self.P = P
         self.dim = dim
         self.lmbda = lmbda
         self.s = s
