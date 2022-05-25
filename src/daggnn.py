@@ -430,7 +430,7 @@ class DSTRUCT_DAG_GNN(pl.LightningModule):
             total_loss += loss
             self._As[i] = origin_A.data.clone().numpy()
     
-        total_loss += self._loss(X)
+        total_loss += self.lmbda * self._loss(X)
 
         self.log("loss", total_loss.item())
 
