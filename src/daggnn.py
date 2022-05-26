@@ -56,7 +56,7 @@ class DAGGNN_MLPEncoder(nn.Module):
         adj_A = torch.eye(adj_A1.size()[0]).double()
         H1 = F.relu((self.fc1(inputs)))
         x = (self.fc2(H1))
-        logits = torch.matmul(x+self.Wa, adj_Aforz) -self.Wa
+        logits = torch.matmul(x+self.Wa, adj_Aforz) - self.Wa
 
         return x, logits, adj_A1, adj_A, self.z, self.z_positive, self.adj_A, self.Wa
 
@@ -211,6 +211,7 @@ class lit_DAG_GNN(pl.LightningModule):
             lr_decay: float=30,
             gamma: float=.1,
             w_threshold: float=.3,
+            recursive_dag_search: bool=True
         ):
         
         super().__init__()
@@ -227,7 +228,7 @@ class lit_DAG_GNN(pl.LightningModule):
         )
         
         self.w_threshold = w_threshold
-
+        self.recursive_dag_search = recursive_dag_search
         
 
         self.lr = lr
@@ -298,14 +299,34 @@ class lit_DAG_GNN(pl.LightningModule):
 
         self.log('loss', loss)
 
-        self.graph = origin_A.data.clone().numpy()
+        self.graph = origin_A.data.clone()
+        self.graph.diagonal().zero_()
+        self.graph = self.graph.numpy()
+
 
         return loss
+    
+    def _get_dag(self, As: np.ndarray) -> np.ndarray:
+        As_temp = np.abs(As.copy())
+
+        As_temp[np.where(As_temp == As_temp[As_temp > 0].min())] = 0
+
+        intermediate_dag = As_temp.copy()
+        intermediate_dag[intermediate_dag > 0] = 1
+
+        if ut.is_dag(intermediate_dag):
+            return intermediate_dag
+        else:
+            return self._get_dag(As_temp)
 
     def get_A(self, threshold) -> np.ndarray:
         B_est = self.graph.copy()
-        B_est[np.abs(B_est) <= threshold] = 0
-        B_est[np.abs(B_est) > threshold] = 1
+
+        if self.recursive_dag_search:
+            B_est = self._get_dag(B_est)
+        else:
+            B_est[np.abs(B_est) <= threshold] = 0
+            B_est[np.abs(B_est) > threshold] = 1
 
         return B_est
 

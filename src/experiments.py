@@ -78,7 +78,7 @@ def experiment(
                 logger=wb_logger, log_every_n_steps=1, **config["train"]
             )
 
-            ut.logger.info(f"Training {m} for exp #{exp_id}")
+            ut.logger.info(f"Training [{m}] for exp #{exp_id}")
             trainer.fit(model, datamodule=D)
             trainer.test(model, datamodule=D)
             ut.logger.info(f"Finished {m} for exp #{exp_id}")
@@ -184,88 +184,88 @@ def main(
 
                 }
             },
-            # "dstruct-sob": {
-            #     "model": {
-            #         "dim": d,
-            #         "dsl": NOTEARS,
-            #         "dsl_config": {"dim": d, "sem_type": "sob"},
-            #         "h_tol": nt_h_tol,
-            #         "rho_max": nt_rho_max,
-            #         "p": BetaP(k, bool(sort), bool(rand_sort)),
-            #         "K": k,
-            #         "lmbda": lmbda,
-            #         "n": n,
-            #         "s": s,
-            #         "dag_type": graph_type,
-            #     },
-            #     "train": {
-            #         "max_epochs": epochs,
-            #         "callbacks": [
-            #             EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
-            #             EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
-            #         ],
-            #     },
-            # },
-            # "dstruct-mlp": {
-            #     "model": {
-            #         "dim": d,
-            #         "dsl": NOTEARS,
-            #         "dsl_config": {"dim": d},
-            #         "h_tol": nt_h_tol,
-            #         "rho_max": nt_rho_max,
-            #         "p": BetaP(k, bool(sort), bool(rand_sort)),
-            #         "K": k,
-            #         "lmbda": lmbda,
-            #         "n": n,
-            #         "s": s,
-            #         "dag_type": graph_type,
-            #     },
-            #     "train": {
-            #         "max_epochs": epochs,
-            #         "callbacks": [
-            #             EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
-            #             EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
-            #         ],
-            #     },
-            # },
-            # "notears-mlp": {
-            #     "model": {
-            #         "model": NOTEARS(dim=d, sem_type='mlp'),
-            #         "h_tol": nt_h_tol,
-            #         "rho_max": nt_rho_max,
-            #         "n": n,
-            #         "s": s,
-            #         "dim": d,
-            #         "K": k,
-            #         "dag_type": graph_type,
-            #     },
-            #     "train": {
-            #         "max_epochs": epochs,
-            #         "callbacks": [
-            #             EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
-            #             EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
-            #         ],
-            #     },
-            # },
-            # "notears-sob": {
-            #     "model": {
-            #         "model": NOTEARS(dim=d, sem_type='sob'),
-            #         "h_tol": nt_h_tol,
-            #         "rho_max": nt_rho_max,
-            #         "n": n,
-            #         "s": s,
-            #         "dim": d,
-            #         "K": k,
-            #         "dag_type": graph_type,
-            #     },
-            #     "train": {
-            #         "max_epochs": epochs,
-            #         "callbacks": [
-            #             EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
-            #             EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
-            #         ],
-            #     },
-            # },
+            "dstruct-sob": {
+                "model": {
+                    "dim": d,
+                    "dsl": NOTEARS,
+                    "dsl_config": {"dim": d, "sem_type": "sob"},
+                    "h_tol": nt_h_tol,
+                    "rho_max": nt_rho_max,
+                    "p": BetaP(k, bool(sort), bool(rand_sort)),
+                    "K": k,
+                    "lmbda": lmbda,
+                    "n": n,
+                    "s": s,
+                    "dag_type": graph_type,
+                },
+                "train": {
+                    "max_epochs": epochs,
+                    "callbacks": [
+                        EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
+                        EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
+                    ],
+                },
+            },
+            "dstruct-mlp": {
+                "model": {
+                    "dim": d,
+                    "dsl": NOTEARS,
+                    "dsl_config": {"dim": d},
+                    "h_tol": nt_h_tol,
+                    "rho_max": nt_rho_max,
+                    "p": BetaP(k, bool(sort), bool(rand_sort)),
+                    "K": k,
+                    "lmbda": lmbda,
+                    "n": n,
+                    "s": s,
+                    "dag_type": graph_type,
+                },
+                "train": {
+                    "max_epochs": epochs,
+                    "callbacks": [
+                        EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
+                        EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
+                    ],
+                },
+            },
+            "notears-mlp": {
+                "model": {
+                    "model": NOTEARS(dim=d, sem_type='mlp'),
+                    "h_tol": nt_h_tol,
+                    "rho_max": nt_rho_max,
+                    "n": n,
+                    "s": s,
+                    "dim": d,
+                    "K": k,
+                    "dag_type": graph_type,
+                },
+                "train": {
+                    "max_epochs": epochs,
+                    "callbacks": [
+                        EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
+                        EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
+                    ],
+                },
+            },
+            "notears-sob": {
+                "model": {
+                    "model": NOTEARS(dim=d, sem_type='sob'),
+                    "h_tol": nt_h_tol,
+                    "rho_max": nt_rho_max,
+                    "n": n,
+                    "s": s,
+                    "dim": d,
+                    "K": k,
+                    "dag_type": graph_type,
+                },
+                "train": {
+                    "max_epochs": epochs,
+                    "callbacks": [
+                        EarlyStopping(monitor="h", stopping_threshold=nt_h_tol),
+                        EarlyStopping(monitor="rho", stopping_threshold=nt_rho_max),
+                    ],
+                },
+            },
             "dag-gnn": {
                 "model": {
                     "dim": d,
