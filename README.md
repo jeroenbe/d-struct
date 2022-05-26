@@ -1,4 +1,4 @@
-# d-struct
+# d-struct: _code_
 
 Experiments are organised as bash files:
 ```bash
