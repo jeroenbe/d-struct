@@ -12,15 +12,12 @@ from tabulate import tabulate
 import src.utils as ut
 from src.data import BetaP, Data
 from src.dstruct import NOTEARS, DStruct, lit_NOTEARS
-from src.daggnn import DAG_GNN, DSTRUCT_DAG_GNN, lit_DAG_GNN
 
 model_refs = {
     "notears-mlp": lit_NOTEARS, 
     "notears-sob": lit_NOTEARS,
     "dstruct-mlp": DStruct, 
     "dstruct-sob": DStruct, 
-    "dag-gnn": lit_DAG_GNN,
-    "dstruct-dag-gnn": DSTRUCT_DAG_GNN,
 }
 
 
@@ -165,25 +162,6 @@ def main(
             "batch_size": batch_size,
         },
         models={
-            "dstruct-dag-gnn": {
-                "model": {
-                    "dim": d,
-                    "n": n,
-                    "dsl": DAG_GNN,
-                    "dsl_config": {
-                        "dim": d,
-                        "n": n,
-                    },
-                    "p": BetaP(k, bool(sort), bool(rand_sort)),
-                    "K": k,
-                    "lmbda": lmbda,
-                    "s": s,
-                },
-                "train": {
-                    "max_epochs": epochs,
-
-                }
-            },
             "dstruct-sob": {
                 "model": {
                     "dim": d,
@@ -266,15 +244,6 @@ def main(
                     ],
                 },
             },
-            "dag-gnn": {
-                "model": {
-                    "dim": d,
-                    "n": n,
-                },
-                "train": {
-                    "max_epochs": epochs
-                }
-            }
         },
     )
 
