@@ -104,9 +104,7 @@ class NotearsMLP(nn.Module):
         return W.cpu().detach().numpy()
 
 
-
-
-
+# From Zheng et al. (2020)
 class NotearsSobolev(nn.Module):
     def __init__(self, d, k):
         """d: num variables k: num expansion of each variable"""

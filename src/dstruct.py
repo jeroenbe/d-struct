@@ -212,17 +212,6 @@ class DStruct(pl.LightningModule):
 
             self.log_dict({"h": h, "rho": rho, "alpha": alpha})
 
-        # def closure():
-        #     opt.zero_grad()
-        #     loss = self._loss()
-        #     self.manual_backward(loss)
-        #     print(f"Loss: {loss.item()}")
-        #     self.log('training loss', loss.item())
-
-        #     return loss
-
-        # print(batch_idx)
-        # opt.step(closure)
 
     def _dual_ascent_step(
         self, x, optimizer: torch.optim.Optimizer, dsl: NOTEARS

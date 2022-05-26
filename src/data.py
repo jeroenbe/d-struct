@@ -95,7 +95,10 @@ class Data(pl.LightningDataModule):
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
-            self.train, batch_size=self.batch_size, num_workers=os.cpu_count()
+            self.train,
+            batch_size=self.batch_size,
+            num_workers=os.cpu_count(),
+
         )
 
     def test_dataloader(self) -> DataLoader:
@@ -104,43 +107,12 @@ class Data(pl.LightningDataModule):
         )
 
 
-class Subset(pl.LightningDataModule):
-    def __init__(
-        self, X: np.ndarray, train_size_ratio: float = 0.5, batch_size: int = 256
-    ) -> None:
-        super().__init__()
-
-        self.train_size_ratio = train_size_ratio
-        self.batch_size = batch_size
-
-        self.X = X
-        self.N = self.X.shape[0]
-
-    def setup(self):
-        DX = TensorDataset(torch.from_numpy(self.X))
-
-        _train_size = np.floor(self.N * self.train_size_ratio)
-        self.train, self.test = random_split(
-            DX, [int(_train_size), int(self.N - _train_size)]
-        )
-
-    def train_dataloader(self) -> DataLoader:
-        return DataLoader(
-            self.train, batch_size=self.batch_size, num_workers=os.cpu_count()
-        )
-
-    def test_dataloader(self) -> DataLoader:
-        return DataLoader(
-            self.test, batch_size=self.batch_size, num_workers=os.cpu_count()
-        )
-
-
 class P:
     def __init__(self):
         pass
 
     @abstractmethod
-    def __call__(self, *args: Any, **kwds: Any) -> Iterable[Subset]:
+    def __call__(self, *args: Any, **kwds: Any) -> Iterable[Any]:
         pass
 
 
@@ -164,7 +136,7 @@ class BetaP(P):
 
         return betas
 
-    def __call__(self, batch: Iterable) -> Iterable[Subset]:
+    def __call__(self, batch: Iterable) -> Iterable[Any]:
         N = batch.shape[0]
 
         if self.sort:
