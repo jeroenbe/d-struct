@@ -32,8 +32,7 @@ class Data(pl.LightningDataModule):
         batch_size: int = 32,
         train_size_ratio: float = 1.0,  # Ratio of train/test split
         loc: str = "data/simulated/",  # Save location for simulated data
-        sort: bool = False,  # sort covariates
-        rand_sort: bool = False,  # random sort (permute) covariates
+        n_datasets: int = 1, # number of datasets to sample
     ):
         super().__init__()
 
@@ -42,6 +41,13 @@ class Data(pl.LightningDataModule):
         self.N = N
         self.sem_type = sem_type
         self.dag_type = dag_type
+
+        self.n_datasets = n_datasets
+
+        if self.n_datasets > 1:
+            self.multiple_datasets = True
+        else:
+            self.multiple_datasets = False
 
         self.batch_size = batch_size
         self.train_size_ratio = train_size_ratio
@@ -67,20 +73,51 @@ class Data(pl.LightningDataModule):
     def _sample(self) -> None:
         assert self.DAG is not None, "No DAG simulated yet"
 
-        self.X = sm.simulate_nonlinear_sem(self.DAG, self.N, self.sem_type)
+        if self.multiple_datasets:
+            datasets_list = []
 
-        np.savetxt(self.loc / str(self._id) / "X.csv", self.X, delimiter=",")
+            for i in range(self.n_datasets):
+                # change noise scale per SEM?
+                print('multi-dataset sem...')
+                datasets_list.append(sm.simulate_nonlinear_sem(self.DAG, self.N, self.sem_type))
+
+            self.X = datasets_list
+
+        else:
+            self.X = sm.simulate_nonlinear_sem(self.DAG, self.N, self.sem_type)
+
+            np.savetxt(self.loc / str(self._id) / "X.csv", self.X, delimiter=",")
 
     def setup(self, stage: Optional[str] = None) -> None:
         assert self.DAG is not None, "No DAG simulated yet"
         assert self.X is not None, "No SEM simulated yet"
 
-        DX = TensorDataset(torch.from_numpy(self.X))
-
         self._train_size = int(np.floor(self.N * self.train_size_ratio))
-        self.train, self.test = random_split(
-            DX, [int(self._train_size), int(self.N - self._train_size)]
-        )
+
+        if self.multiple_datasets:
+            train_list = []
+            test_list = []
+
+            for i in range(len(self.X)):
+                DX = TensorDataset(torch.from_numpy(self.X[i]))
+
+                train, test = random_split(
+                    DX, [int(self._train_size), int(self.N - self._train_size)]
+                )
+
+                train_list.append(train)
+                test_list.append(test)
+
+            self.train = train_list
+            self.test = test_list
+
+        else:
+            
+            DX = TensorDataset(torch.from_numpy(self.X))
+
+            self.train, self.test = random_split(
+                DX, [int(self._train_size), int(self.N - self._train_size)]
+            )
 
     def resample(self) -> None:
         """
@@ -94,14 +131,42 @@ class Data(pl.LightningDataModule):
         self.setup()
 
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(
-            self.train, batch_size=self.batch_size, num_workers=os.cpu_count()
-        )
+
+        if self.multiple_datasets:
+
+            dataloader_dict = {}
+            for i in range(len(self.train)):
+                print('multi-dataset dataloader...')
+                loader = DataLoader(self.train[i], batch_size=self.batch_size, num_workers=os.cpu_count())
+                dataloader_dict[f"subset{i+1}"] = loader
+
+            return dataloader_dict
+
+        else:
+            return DataLoader(
+                self.train, batch_size=self.batch_size, num_workers=os.cpu_count()
+            )
 
     def test_dataloader(self) -> DataLoader:
-        return DataLoader(
-            self.test, batch_size=len(self.test), num_workers=os.cpu_count()
-        )
+        
+        if self.multiple_datasets:
+
+            dataloader_dict = {}
+            for i in range(len(self.test)):
+
+                loader = DataLoader(self.test[i], batch_size=len(self.test[i]), num_workers=os.cpu_count())
+                dataloader_dict[f"subset{i+1}"] = loader
+
+            return DataLoader(
+                    self.test[i], batch_size=len(self.test[i]), num_workers=os.cpu_count()
+            )#dataloader_dict
+        else:
+            return DataLoader(
+                    self.test, batch_size=len(self.test), num_workers=os.cpu_count()
+            )
+
+
+        
 
 
 class Subset(pl.LightningDataModule):
@@ -145,12 +210,13 @@ class P:
 
 
 class BetaP(P):
-    def __init__(self, K: int, sort: bool = False, rand_sort: bool = False):
+    def __init__(self, K: int, sort: bool = False, rand_sort: bool = False, use_betas: bool = True):
         super().__init__()
 
         self.betas = self._get_betas(K)
         self.sort = sort
         self.rand_sort = rand_sort
+        self.use_betas = use_betas
 
     def _get_betas(self, K: int):
         assert K > 0, f"Cannot have K of {K}"
@@ -174,12 +240,18 @@ class BetaP(P):
             batch = batch[torch.randperm(batch.size()[0])]
 
         subsets = []
-        for beta in self.betas:
-            probs = beta.pdf(np.linspace(0, 1, N))
-            probs = (probs - probs.min()) / (probs.max() - probs.min())
-
-            mask = np.random.binomial(1, probs)
-
-            X = batch[mask == 1]
+        if self.use_betas==False:
+          for X in np.array_split(batch, len(self.betas)):
             subsets.append(X)
+
+        if self.use_betas==True:
+          for beta in self.betas:
+              probs = beta.pdf(np.linspace(0, 1, N))
+              probs = (probs - probs.min()) / (probs.max() - probs.min())
+
+              mask = np.random.binomial(1, probs)
+
+              X = batch[mask == 1]
+              subsets.append(X)
+
         return tuple(subsets)

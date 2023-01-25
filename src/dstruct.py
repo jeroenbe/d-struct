@@ -67,6 +67,7 @@ class lit_NOTEARS(pl.LightningModule):
         s: int = 9,
         K: int = 5,
         dag_type="ER",
+        n_datasets: int = 1,
         dim: int = 5,
         save_hyperparams: bool = True,
     ):
@@ -77,6 +78,8 @@ class lit_NOTEARS(pl.LightningModule):
 
         self.h_tol, self.rho_max = h_tol, rho_max
         self.w_threshold = w_threshold
+
+        self.n_datasets = n_datasets
 
         # We need a way to cope with NOTEARS dual
         #   ascent strategy.
@@ -92,7 +95,7 @@ class lit_NOTEARS(pl.LightningModule):
         elif dag_type == "BP":
             dag = 3
 
-        self.log_dict({"s": s, "dag_type": dag, "dim": dim, "n": n, "K": K})
+        self.log_dict({"s": s, "dag_type": dag, "dim": dim, "n": n, "K": K, "n_datasets": n_datasets})
 
     def _dual_ascent_step(self, x, optimizer: torch.optim.Optimizer) -> Tuple[float]:
         h_new = None
@@ -119,7 +122,16 @@ class lit_NOTEARS(pl.LightningModule):
     def training_step(self, batch, batch_idx) -> Any:
         opt = self.optimizers()
 
-        (X,) = batch
+        if self.n_datasets==1:
+            (X,) = batch
+
+        else: # multiple datasets
+            dataset_list = []
+            for key in batch.keys():
+                (X,) = batch[key] 
+                dataset_list.append(X)
+            
+            X = torch.cat(dataset_list, dim=0)
 
         alpha, rho, h = self._dual_ascent_step(X, opt)
         self.h = h
@@ -162,6 +174,8 @@ class DStruct(pl.LightningModule):
         n: int = 200,
         s: int = 9,
         dag_type="ER",
+        n_datasets: int = 1,
+        use_betas: bool = True,
         h_tol: float = 1e-8,
         rho_max: float = 1e16,
         w_threshold: float = 0.3,
@@ -177,6 +191,12 @@ class DStruct(pl.LightningModule):
         self.lmbda = lmbda
         self.s = s
 
+        self.n_datasets = n_datasets
+
+        if self.n_datasets>1:
+          K = self.n_datasets
+          self.K = self.n_datasets
+
         self.automatic_optimization = False
         self.dsl_list = nn.ModuleList([NOTEARS(dim=self.dim) for i in range(self.K)])
 
@@ -188,8 +208,18 @@ class DStruct(pl.LightningModule):
         self.save_hyperparameters()
 
     def training_step(self, batch, batch_idx):
-        (X,) = batch
-        subsets = self.p(X)
+
+        if self.n_datasets==1:
+            (X,) = batch
+            subsets = self.p(X)
+
+        else: # multiple datasets
+            subsets = []
+            print('multi-dataset batches...')
+            for key in list(batch.keys()):
+                (X,) = batch[key] 
+                subsets.append(X)
+            subsets = tuple(subsets)
 
         opts = self.optimizers()
         opt = opts[0]
