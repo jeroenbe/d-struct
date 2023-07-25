@@ -4,21 +4,21 @@ import click
 import numpy as np
 import pytorch_lightning as pl
 import torch
-import wandb
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 from tabulate import tabulate
 
 import src.utils as ut
+import wandb
+from src.daggnn import DSTRUCT_DAG_GNN, lit_DAG_GNN
 from src.data import BetaP, Data
 from src.dstruct import NOTEARS, DStruct, lit_NOTEARS
-from src.daggnn import DAG_GNN, DSTRUCT_DAG_GNN, lit_DAG_GNN
 
 model_refs = {
-    "notears-mlp": lit_NOTEARS, 
+    "notears-mlp": lit_NOTEARS,
     "notears-sob": lit_NOTEARS,
-    "dstruct-mlp": DStruct, 
-    "dstruct-sob": DStruct, 
+    "dstruct-mlp": DStruct,
+    "dstruct-sob": DStruct,
     "dag-gnn": lit_DAG_GNN,
     "dstruct-dag-gnn": DSTRUCT_DAG_GNN,
 }
@@ -28,15 +28,14 @@ def experiment(
     count: int = 10,
     models: dict = {  # Options: 'notears-mlp', 'notears-sob', 'dstruct-nt-mlp', 'dstruct-nt-sob'
         "notears-mlp": {  # Structure: {
-            "model": {},  #   <model-name>: {
-            "train": {},  #       'model': {<KWArgs for model>},
-        }  #       'train': {<KWArgs for train>},
-    },  #   }
+            "model": {},  # <model-name>: {
+            "train": {},  # 'model': {<KWArgs for model>},
+        }  # 'train': {<KWArgs for train>},
+    },  # }
     # }
     data_config: dict = {},  # KWArgs for Data DataModule
     wb_name: str = "test_experiment",  # subdiv for the w&b project
 ) -> Any:
-
     experiment_summary = f"""
     Starting following setup:
     --> {count} experiments
@@ -54,7 +53,6 @@ def experiment(
 
     i = 0
     for exp_id in range(count):
-
         D = datasets[i]
         D.setup()
 
@@ -87,7 +85,7 @@ def experiment(
             wb_logger.finalize("success")
         ut.logger.info(f"Finished exp #{exp_id}")
         i += 1
-    ut.logger.info(f"Finished.")
+    ut.logger.info("Finished.")
 
 
 @click.command()
@@ -128,7 +126,9 @@ def experiment(
 @click.option(
     "--rand_sort", type=bool, default="False", help="bool - random sort batches."
 )
-@click.option("--experiment_count", type=int, default=5, help="Amount of seq. experiments to run.")
+@click.option(
+    "--experiment_count", type=int, default=5, help="Amount of seq. experiments to run."
+)
 def main(
     d,
     n,
@@ -146,7 +146,6 @@ def main(
     rand_sort,
     experiment_count,
 ):
-
     torch.set_default_dtype(torch.double)
     np.set_printoptions(precision=3)
 
@@ -181,7 +180,6 @@ def main(
             #     },
             #     "train": {
             #         "max_epochs": epochs,
-
             #     }
             # },
             # "dstruct-sob": {
@@ -230,7 +228,7 @@ def main(
             },
             "notears-mlp": {
                 "model": {
-                    "model": NOTEARS(dim=d, sem_type='mlp'),
+                    "model": NOTEARS(dim=d, sem_type="mlp"),
                     "h_tol": nt_h_tol,
                     "rho_max": nt_rho_max,
                     "n": n,

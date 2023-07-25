@@ -1,6 +1,3 @@
-import math
-
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -26,8 +23,10 @@ class NotearsMLP(nn.Module):
         self.fc1_neg.weight.bounds = self._bounds()
         # fc2: local linear layers
         layers = []
-        for l in range(len(dims) - 2):
-            layers.append(LocallyConnected(d, dims[l + 1], dims[l + 2], bias=bias))
+        for layer in range(len(dims) - 2):
+            layers.append(
+                LocallyConnected(d, dims[layer + 1], dims[layer + 2], bias=bias)
+            )
         self.fc2 = nn.ModuleList(layers)
 
     def _check(self, target):
@@ -79,9 +78,9 @@ class NotearsMLP(nn.Module):
         """Take 2-norm-squared of all parameters"""
         reg = 0.0
         fc1_weight = self.fc1_pos.weight - self.fc1_neg.weight  # [j * m1, i]
-        reg += torch.sum(fc1_weight ** 2)
+        reg += torch.sum(fc1_weight**2)
         for fc in self.fc2:
-            reg += torch.sum(fc.weight ** 2)
+            reg += torch.sum(fc.weight**2)
         return reg
 
     def fc1_l1_reg(self):
@@ -102,9 +101,6 @@ class NotearsMLP(nn.Module):
     def fc1_to_adj(self) -> np.ndarray:
         W = self.fc1_to_adj_grad()
         return W.cpu().detach().numpy()
-
-
-
 
 
 class NotearsSobolev(nn.Module):
@@ -146,7 +142,7 @@ class NotearsSobolev(nn.Module):
     def forward(self, x):  # [n, d] -> [n, d]
         bases = self.sobolev_basis(x)  # [n, dk]
         x = self.fc1_pos(bases) - self.fc1_neg(bases)  # [n, d]
-        self.l2_reg_store = torch.sum(x ** 2) / x.shape[0]
+        self.l2_reg_store = torch.sum(x**2) / x.shape[0]
         return x
 
     def h_func(self):
@@ -167,8 +163,6 @@ class NotearsSobolev(nn.Module):
     def fc1_l1_reg(self):
         reg = torch.sum(self.fc1_pos.weight + self.fc1_neg.weight)
         return reg
-
-    
 
     def fc1_to_adj_grad(self) -> np.ndarray:
         fc1_weight = self.fc1_pos.weight - self.fc1_neg.weight  # [j, ik]

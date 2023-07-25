@@ -1,10 +1,7 @@
 # adapted from Zheng et al. (2020) -> https://github.com/xunzheng/notears/blob/master/notears/utils.py
 
-import random
-
 import igraph as ig
 import numpy as np
-import sklearn
 from scipy.special import expit as sigmoid
 
 

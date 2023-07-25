@@ -1,14 +1,12 @@
-from contextlib import nullcontext
 from typing import Any, Callable, Iterable, Tuple
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-from scipy.sparse.linalg import dsolve
 
 import src.utils as ut
-from src.data import Data, P
+from src.data import P
 from src.dsl import NotearsMLP, NotearsSobolev
 
 
@@ -17,16 +15,20 @@ class NOTEARS(nn.Module):
         self,
         dim: int,  # Dims of system
         nonlinear_dims: list = [10, 10, 1],  # Dims for non-linear arch
-        sem_type: str='mlp',
+        sem_type: str = "mlp",
         rho: float = 1.0,  # NOTEARS parameters
-        alpha: float = 1.0,  #   |
-        lambda1: float = 0.0,  #   |
-        lambda2: float = 0.0,  #   |
+        alpha: float = 1.0,  # |
+        lambda1: float = 0.0,  # |
+        lambda2: float = 0.0,  # |
     ):
         super().__init__()
 
         self.dim = dim
-        self.notears = NotearsMLP(dims=[dim, *nonlinear_dims]) if sem_type == "mlp" else NotearsSobolev(dim, 5)
+        self.notears = (
+            NotearsMLP(dims=[dim, *nonlinear_dims])
+            if sem_type == "mlp"
+            else NotearsSobolev(dim, 5)
+        )
 
         self.rho = rho
         self.alpha = alpha
@@ -166,7 +168,6 @@ class DStruct(pl.LightningModule):
         rho_max: float = 1e16,
         w_threshold: float = 0.3,
     ):
-
         super().__init__()
 
         self.h_tol, self.rho_max, self.w_threshold = h_tol, rho_max, w_threshold
@@ -297,18 +298,17 @@ class DStruct(pl.LightningModule):
         A_comp.detach()
         A_comp.diagonal().zero_()
 
-        l = 0
+        loss = 0
         mse = nn.MSELoss()
         for A_est in As:
-            l += mse(A_est * mask, A_comp)
-        return l
+            loss += mse(A_est * mask, A_comp)
+        return loss
 
     def A(self, threshold=0.5) -> np.ndarray:
         _, A = self.forward(threshold=threshold, grad=False)
         return A
 
     def test_step(self, batch, batch_idx) -> Any:
-
         for threshold in np.linspace(start=0, stop=1, num=100):
             B_est = self.A(threshold)
             if ut.is_dag(B_est):
